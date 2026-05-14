@@ -2,14 +2,15 @@
 //  UIKitMarkdownPreview.swift
 //  MarkdownEngine
 //
-//  Read-only Markdown preview for iOS / iPadOS, milestone 1 of the
-//  iOS port. Uses TextKit 2 via UITextView and the shared
-//  cross-platform styler to render an NSAttributedString.
+//  Read-only Markdown preview for iOS / iPadOS, milestone 1+2 of the
+//  iOS port. Uses TextKit 2 via UITextView, the shared cross-platform
+//  styler, and the cross-platform `MarkdownTextLayoutFragment` so task
+//  checkboxes, code-block backgrounds, inline-code pills, embedded
+//  images, and rendered LaTeX show up on iOS the same way they do on
+//  Mac.
 //
 //  Not yet wired:
 //    - editing (caret, typing, list helpers)
-//    - inline image embeds and LaTeX renderings (the rendering surface
-//      lives in the Mac-only `MarkdownTextLayoutFragment`)
 //    - tap-to-toggle task checkboxes
 //    - wiki-link / code-block selection callbacks
 //
@@ -21,9 +22,9 @@ import UIKit
 /// SwiftUI bridge that renders Markdown read-only on iOS / iPadOS / visionOS.
 ///
 /// Styled output uses the same `MarkdownStyler` the Mac editor does, so heading
-/// sizes, emphasis runs, list paragraph styling, and link attributes all match.
-/// Inline image embeds and rendered LaTeX are not drawn yet — those use a
-/// custom `NSTextLayoutFragment` that's still macOS-only.
+/// sizes, emphasis runs, list paragraph styling, link attributes, code-block
+/// backgrounds, inline-code pills, task checkboxes, and LaTeX images all
+/// match the Mac live editor pixel-for-pixel where the inputs allow.
 public struct UIKitMarkdownPreview: UIViewRepresentable {
     public typealias UIViewType = UITextView
 
@@ -44,8 +45,13 @@ public struct UIKitMarkdownPreview: UIViewRepresentable {
         self.fontSize = fontSize
     }
 
+    public func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     public func makeUIView(context: Context) -> UITextView {
-        // Initializing with `usingTextLayoutManager: true` opts in to TextKit 2.
+        // `usingTextLayoutManager: true` opts in to TextKit 2 so we get
+        // `NSTextLayoutFragment` callbacks.
         let textView = UITextView(usingTextLayoutManager: true)
         textView.isEditable = false
         textView.isSelectable = true
@@ -62,12 +68,41 @@ public struct UIKitMarkdownPreview: UIViewRepresentable {
         textView.linkTextAttributes = [
             .foregroundColor: configuration.theme.link
         ]
+
+        installLayoutDelegate(on: textView, context: context)
         applyAttributedText(to: textView)
         return textView
     }
 
     public func updateUIView(_ textView: UITextView, context: Context) {
+        // Keep the delegate's render context fresh so config / font changes
+        // take effect on the next redraw without rebuilding the view.
+        let baseFont = PlatformFontMaker.make(name: fontName, size: fontSize)
+        if let delegate = context.coordinator.layoutDelegate {
+            if delegate.renderContext == nil {
+                delegate.renderContext = MarkdownRenderContext(
+                    configuration: configuration,
+                    baseFont: baseFont
+                )
+            } else {
+                delegate.renderContext?.configuration = configuration
+                delegate.renderContext?.baseFont = baseFont
+            }
+        } else {
+            installLayoutDelegate(on: textView, context: context)
+        }
         applyAttributedText(to: textView)
+    }
+
+    private func installLayoutDelegate(on textView: UITextView, context: Context) {
+        guard let textLayoutManager = textView.textLayoutManager else { return }
+        let delegate = MarkdownLayoutManagerDelegate()
+        delegate.renderContext = MarkdownRenderContext(
+            configuration: configuration,
+            baseFont: PlatformFontMaker.make(name: fontName, size: fontSize)
+        )
+        context.coordinator.layoutDelegate = delegate
+        textLayoutManager.delegate = delegate
     }
 
     private func applyAttributedText(to textView: UITextView) {
@@ -122,6 +157,12 @@ public struct UIKitMarkdownPreview: UIViewRepresentable {
             }
         }
         return result
+    }
+
+    /// Holds the strong reference to the layout-manager delegate (UITextView's
+    /// `textLayoutManager.delegate` is weak) so it survives across redraws.
+    public final class Coordinator {
+        var layoutDelegate: MarkdownLayoutManagerDelegate?
     }
 }
 #endif

@@ -127,4 +127,128 @@ extension NSValue {
         return NSValue(cgRect: rect)
         #endif
     }
+
+    /// Cross-platform unwrap. AppKit reads it back as `rectValue`,
+    /// UIKit as `cgRectValue`.
+    var cgRectValueCross: CGRect {
+        #if os(macOS)
+        return rectValue
+        #else
+        return cgRectValue
+        #endif
+    }
+}
+
+extension PlatformColor {
+    /// Cross-platform RGB(A) component extraction. Returns nil if the color
+    /// can't be converted to a calibrated RGB space.
+    func rgbComponents() -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)? {
+        #if canImport(AppKit)
+        guard let rgb = usingColorSpace(.deviceRGB) else { return nil }
+        return (rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent)
+        #else
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        return (r, g, b, a)
+        #endif
+    }
+}
+
+/// Drawing helpers that wrap the AppKit `NSGraphicsContext` / UIKit
+/// `UIGraphicsPushContext` push-pop dance so the rest of the renderer can
+/// stay platform-agnostic.
+enum PlatformGraphics {
+    /// Push `context` as current for the duration of `block`, treating coordinates
+    /// as flipped (top-left origin) on both platforms. AppKit needs an explicit
+    /// `NSGraphicsContext(cgContext:flipped:)`; UIKit always uses the active CG
+    /// context and is already top-left flipped.
+    static func withFlippedContext(_ context: CGContext, _ block: () -> Void) {
+        #if canImport(AppKit)
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        block()
+        #else
+        UIGraphicsPushContext(context)
+        defer { UIGraphicsPopContext() }
+        block()
+        #endif
+    }
+}
+
+extension PlatformBezierPath {
+    /// AppKit's `NSBezierPath` has `appendRect(_:)`; UIKit's `UIBezierPath`
+    /// uses `append(UIBezierPath(rect:))`. Single name on both.
+    func appendCrossPlatform(rect: CGRect) {
+        #if canImport(AppKit)
+        appendRect(rect)
+        #else
+        append(UIBezierPath(rect: rect))
+        #endif
+    }
+
+    /// `NSBezierPath.windingRule = .evenOdd` vs
+    /// `UIBezierPath.usesEvenOddFillRule = true`.
+    func setEvenOddFillRule() {
+        #if canImport(AppKit)
+        windingRule = .evenOdd
+        #else
+        usesEvenOddFillRule = true
+        #endif
+    }
+}
+
+extension PlatformImage {
+    /// Cross-platform SF Symbol lookup. AppKit takes `accessibilityDescription:`,
+    /// UIKit takes a `withConfiguration:` parameter for size/weight.
+    static func systemSymbol(name: String) -> PlatformImage? {
+        #if canImport(AppKit)
+        return NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        #else
+        return UIImage(systemName: name)
+        #endif
+    }
+
+    /// SF Symbol with an explicit point size and hierarchical tint color, regular
+    /// weight. Returns nil if the symbol name is unknown.
+    static func systemSymbol(
+        name: String,
+        pointSize: CGFloat,
+        hierarchicalTint: PlatformColor
+    ) -> PlatformImage? {
+        #if canImport(AppKit)
+        guard let base = NSImage(systemSymbolName: name, accessibilityDescription: nil) else {
+            return nil
+        }
+        let sizeConfig = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
+        let colorConfig = NSImage.SymbolConfiguration(hierarchicalColor: hierarchicalTint)
+        return base.withSymbolConfiguration(sizeConfig.applying(colorConfig)) ?? base
+        #else
+        guard let base = UIImage(systemName: name) else { return nil }
+        let sizeConfig = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
+        let colorConfig = UIImage.SymbolConfiguration(hierarchicalColor: hierarchicalTint)
+        let combined = sizeConfig.applying(colorConfig)
+        return base.applyingSymbolConfiguration(combined) ?? base
+        #endif
+    }
+}
+
+enum PlatformScale {
+    /// Best-effort device pixel scale. Falls back to 2.0 (Retina) when
+    /// neither the view nor a main screen is reachable.
+    static func backingScale(for textView: AnyObject?) -> CGFloat {
+        #if canImport(AppKit)
+        if let tv = textView as? NSView,
+           let scale = tv.window?.backingScaleFactor {
+            return scale
+        }
+        return NSScreen.main?.backingScaleFactor ?? 2.0
+        #else
+        if let tv = textView as? UIView,
+           let scale = tv.window?.screen.scale {
+            return scale
+        }
+        return UIScreen.main.scale
+        #endif
+    }
 }
