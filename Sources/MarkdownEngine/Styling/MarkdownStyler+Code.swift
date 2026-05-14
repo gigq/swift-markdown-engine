@@ -7,7 +7,11 @@
 //  Fenced code blocks and inline code spans.
 //
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 
 extension MarkdownStyler {
@@ -36,7 +40,7 @@ extension MarkdownStyler {
             }
             let markerAttributes: [NSAttributedString.Key: Any] = isActive
                 ? [.foregroundColor: ctx.configuration.theme.mutedText, .font: ctx.codeFont]
-                : [.foregroundColor: NSColor.clear, .font: ctx.hiddenMarkerFont]
+                : [.foregroundColor: PlatformColor.clear, .font: ctx.hiddenMarkerFont]
             token.markerRanges.forEach { attrs.append(($0, markerAttributes)) }
         }
         return attrs

@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  NativeTextView+PasteHandling.swift
 //  MarkdownEngine
@@ -90,3 +91,5 @@ extension NativeTextView {
         return super.validateUserInterfaceItem(item)
     }
 }
+
+#endif

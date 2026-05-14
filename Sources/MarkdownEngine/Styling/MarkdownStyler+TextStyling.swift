@@ -7,7 +7,11 @@
 //  Heading and emphasis (bold / italic / bold+italic) attribute generation.
 //
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 
 extension MarkdownStyler {
@@ -21,8 +25,8 @@ extension MarkdownStyler {
             let level = token.markerRanges.first?.length ?? 1
             let multiplier = ctx.configuration.headings.fontMultiplier(for: level)
             let fontSize = ctx.baseFont.pointSize * multiplier
-            let headingBase = NSFont(name: ctx.fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
-            let headingFont = NSFontManager.shared.convert(headingBase, toHaveTrait: .boldFontMask)
+            let headingBase = PlatformFontMaker.make(name: ctx.fontName, size: fontSize)
+            let headingFont = PlatformFontMaker.bold(headingBase)
 
             let paraRange = ctx.nsText.paragraphRange(for: token.range)
             let headingLineHeight = ceil(layoutBridgeDefaultLineHeight(for: headingFont, using: ctx.layoutBridge)) + 1
@@ -84,7 +88,7 @@ extension MarkdownStyler {
             var j = i + 1
             while j < len && traits[j] == t { j += 1 }
             let range = NSRange(location: i, length: j - i)
-            let font: NSFont
+            let font: PlatformFont
             if t == boldBit | italicBit {
                 font = headingAwareBoldItalic(in: ctx, contentLocation: i) ?? regularBoldItalic
             } else if t == boldBit {
@@ -98,35 +102,26 @@ extension MarkdownStyler {
         return attrs
     }
 
-    private static func boldFont(in ctx: StylingContext) -> NSFont {
-        let desc = ctx.baseDescriptor.withSymbolicTraits(.bold)
-        return NSFont(descriptor: desc, size: ctx.baseFont.pointSize)
-            ?? NSFontManager.shared.convert(ctx.baseFont, toHaveTrait: .boldFontMask)
+    private static func boldFont(in ctx: StylingContext) -> PlatformFont {
+        PlatformFontMaker.bold(ctx.baseFont)
     }
 
-    private static func italicFont(in ctx: StylingContext) -> NSFont {
-        let desc = ctx.baseDescriptor.withSymbolicTraits(.italic)
-        return NSFont(descriptor: desc, size: ctx.baseFont.pointSize)
-            ?? NSFontManager.shared.convert(ctx.baseFont, toHaveTrait: .italicFontMask)
+    private static func italicFont(in ctx: StylingContext) -> PlatformFont {
+        PlatformFontMaker.italic(ctx.baseFont)
     }
 
-    private static func boldItalicFont(in ctx: StylingContext) -> NSFont {
-        let desc = ctx.baseDescriptor.withSymbolicTraits([.bold, .italic])
-        return NSFont(descriptor: desc, size: ctx.baseFont.pointSize)
-            ?? NSFontManager.shared.convert(ctx.baseFont, toHaveTrait: [.boldFontMask, .italicFontMask])
+    private static func boldItalicFont(in ctx: StylingContext) -> PlatformFont {
+        PlatformFontMaker.boldItalic(ctx.baseFont)
     }
 
     /// Returns a heading-sized bold+italic font when the location sits inside a heading, else `nil` so emphasis doesn't shrink mid-line.
-    private static func headingAwareBoldItalic(in ctx: StylingContext, contentLocation: Int) -> NSFont? {
+    private static func headingAwareBoldItalic(in ctx: StylingContext, contentLocation: Int) -> PlatformFont? {
         guard let headingToken = ctx.tokens.first(where: {
             $0.kind == .heading && NSLocationInRange(contentLocation, $0.contentRange)
         }) else { return nil }
         let level = headingToken.markerRanges.first?.length ?? 1
         let multiplier = ctx.configuration.headings.fontMultiplier(for: level)
-        let headingBase = NSFont(name: ctx.fontName, size: ctx.baseFont.pointSize * multiplier)
-            ?? NSFont.systemFont(ofSize: ctx.baseFont.pointSize * multiplier)
-        let desc = headingBase.fontDescriptor.withSymbolicTraits([.bold, .italic])
-        return NSFont(descriptor: desc, size: headingBase.pointSize)
-            ?? NSFontManager.shared.convert(headingBase, toHaveTrait: [.boldFontMask, .italicFontMask])
+        let headingBase = PlatformFontMaker.make(name: ctx.fontName, size: ctx.baseFont.pointSize * multiplier)
+        return PlatformFontMaker.boldItalic(headingBase)
     }
 }

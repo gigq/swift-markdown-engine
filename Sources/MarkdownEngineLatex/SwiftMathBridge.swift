@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  SwiftMathBridge.swift
 //  MarkdownEngineLatex
@@ -178,3 +179,5 @@ public final class SwiftMathBridge: LatexRenderer, @unchecked Sendable {
         return image
     }
 }
+
+#endif

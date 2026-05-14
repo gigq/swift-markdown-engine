@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  ClampedScrollView.swift
 //  MarkdownEngine
@@ -47,3 +48,5 @@ final class ClampedScrollView: NSScrollView {
         }
     }
 }
+
+#endif

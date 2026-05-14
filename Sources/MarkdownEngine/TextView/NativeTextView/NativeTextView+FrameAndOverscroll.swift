@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  NativeTextView+FrameAndOverscroll.swift
 //  MarkdownEngine
@@ -142,3 +143,5 @@ extension NativeTextView {
         }
     }
 }
+
+#endif

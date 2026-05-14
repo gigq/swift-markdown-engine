@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  MarkdownTextLayoutFragment.swift
 //  MarkdownEngine
@@ -10,14 +11,8 @@
 
 import AppKit
 
-// MARK: - Custom attribute keys for rendering overlays
-
-extension NSAttributedString.Key {
-    static let latexImage = NSAttributedString.Key("LatexRenderedImage")
-    static let latexBounds = NSAttributedString.Key("LatexImageBounds")
-    static let latexIsBlock = NSAttributedString.Key("LatexIsBlock")
-    static let latexBlockOffsetY = NSAttributedString.Key("LatexBlockOffsetY")
-}
+// Custom attribute keys live in `Internal/MarkdownAttributeKeys.swift` so the
+// cross-platform styler can write them without depending on this Mac-only file.
 
 final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
 
@@ -392,3 +387,5 @@ final class MarkdownLayoutManagerDelegate: NSObject, NSTextLayoutManagerDelegate
         return fragment
     }
 }
+
+#endif

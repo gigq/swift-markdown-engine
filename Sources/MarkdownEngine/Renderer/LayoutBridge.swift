@@ -7,10 +7,15 @@
 //  Thin helper around TextKit 2's NSTextLayoutManager for the handful of
 //  character-range queries the editor needs.
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
+import Foundation
 
 /// Line height from the bridge, or a font-metric fallback when no bridge is available.
-func layoutBridgeDefaultLineHeight(for font: NSFont, using bridge: LayoutBridge? = nil) -> CGFloat {
+func layoutBridgeDefaultLineHeight(for font: PlatformFont, using bridge: LayoutBridge? = nil) -> CGFloat {
     bridge?.defaultLineHeight(for: font)
         ?? (font.ascender - font.descender + font.leading)
 }
@@ -33,7 +38,7 @@ final class LayoutBridge {
         return NSTextRange(location: start, end: end)
     }
 
-    func defaultLineHeight(for font: NSFont) -> CGFloat {
+    func defaultLineHeight(for font: PlatformFont) -> CGFloat {
         font.ascender - font.descender + font.leading
     }
 

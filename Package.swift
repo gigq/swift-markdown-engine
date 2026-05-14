@@ -1,7 +1,13 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
-// MarkdownEngine — a TextKit-2 backed Markdown editor view for macOS.
+// MarkdownEngine — a TextKit-2 backed Markdown editor view for macOS, with an
+// in-progress read-only renderer for iOS / iPadOS.
+//
+// On macOS the package vends a TextKit 2 `NSTextView`-backed editor.
+// On iOS the package currently vends only the shared parser/styler plus a
+// minimal `UIViewRepresentable` for read-only rendering; full editing parity
+// is being ported incrementally.
 //
 // Embedders import `MarkdownEngine` and supply their own adapters that
 // conform to the engine's service protocols (`WikiLinkResolver`,
@@ -17,7 +23,7 @@ import PackageDescription
 // at link time.
 let package = Package(
     name: "MarkdownEngine",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS(.v17)],
     products: [
         .library(name: "MarkdownEngine", targets: ["MarkdownEngine"]),
         .library(name: "MarkdownEngineCodeBlocks", targets: ["MarkdownEngineCodeBlocks"]),

@@ -15,7 +15,11 @@
 //   - MarkdownStyler+Latex.swift         (block + inline LaTeX)
 //   - MarkdownStyler+Images.swift        (image embeds)
 //   - MarkdownStyler+TaskCheckboxes.swift
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 
 // MARK: - Regexes used only by styling
@@ -50,19 +54,19 @@ extension MarkdownStyler {
         let tokens: [MarkdownToken]
         let codeTokens: [MarkdownToken]
         let activeTokenIndices: Set<Int>
-        let baseFont: NSFont
-        let baseDescriptor: NSFontDescriptor
+        let baseFont: PlatformFont
+        let baseDescriptor: PlatformFontDescriptor
         let fontName: String
         let caretLocation: Int
         let layoutBridge: LayoutBridge?
         let baseDefaultLineHeight: CGFloat
         let baseParagraphSpacing: CGFloat
-        let codeFont: NSFont
-        let codeBackgroundColor: NSColor
+        let codeFont: PlatformFont
+        let codeBackgroundColor: PlatformColor
         let codeParagraphStyle: NSParagraphStyle
-        let hiddenMarkerFont: NSFont
-        let inlineMarkerFont: NSFont
-        let latexMarkerFont: NSFont
+        let hiddenMarkerFont: PlatformFont
+        let inlineMarkerFont: PlatformFont
+        let latexMarkerFont: PlatformFont
         let configuration: MarkdownEditorConfiguration
 
         var services: MarkdownEditorServices { configuration.services }
@@ -91,7 +95,7 @@ enum MarkdownStyler {
         let nsText = text as NSString
         let fullRange = NSRange(location: 0, length: nsText.length)
         let codeTokens = tokens.filter { $0.kind == .codeBlock || $0.kind == .inlineCode }
-        let baseFont = NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        let baseFont = PlatformFont(name: fontName, size: fontSize) ?? PlatformFont.systemFont(ofSize: fontSize)
         let baseDefaultLineHeight = ceil(
             layoutBridge?.defaultLineHeight(for: baseFont)
             ?? (baseFont.ascender - baseFont.descender + baseFont.leading)
@@ -139,9 +143,9 @@ enum MarkdownStyler {
             codeBackgroundColor: codeBackgroundColor,
             codeParagraphStyle: codeParagraphStyle,
             hiddenMarkerFont: codeFont,
-            inlineMarkerFont: NSFont.systemFont(ofSize: hiddenMarkerSize),
-            latexMarkerFont: NSFont(name: fontName, size: hiddenMarkerSize)
-                ?? NSFont.systemFont(ofSize: hiddenMarkerSize),
+            inlineMarkerFont: PlatformFont.systemFont(ofSize: hiddenMarkerSize),
+            latexMarkerFont: PlatformFont(name: fontName, size: hiddenMarkerSize)
+                ?? PlatformFont.systemFont(ofSize: hiddenMarkerSize),
             configuration: configuration
         )
 
@@ -197,7 +201,7 @@ extension MarkdownStyler {
     static func appendRenderedStandaloneBlock(
         for token: MarkdownToken,
         rawContent: String,
-        image: NSImage,
+        image: PlatformImage,
         imageBounds: CGRect,
         paragraphSpacingBefore: CGFloat,
         paragraphSpacing: CGFloat,
@@ -246,7 +250,7 @@ extension MarkdownStyler {
                 let leadingRange = NSRange(location: token.contentRange.location, length: leadingWhitespaceUnits)
                 let leadingText = ctx.nsText.substring(with: leadingRange)
                 attrs.append((leadingRange, [
-                    .foregroundColor: NSColor.clear,
+                    .foregroundColor: PlatformColor.clear,
                     .font: ctx.latexMarkerFont,
                     .kern: -HeadingHelpers.textWidth(leadingText, font: ctx.latexMarkerFont)
                 ]))
@@ -256,9 +260,9 @@ extension MarkdownStyler {
             let anchorChar = ctx.nsText.substring(with: anchorRange)
             attrs.append((anchorRange, [
                 .latexImage: image,
-                .latexBounds: NSValue(rect: imageBounds),
+                .latexBounds: NSValue.cgRectValue(imageBounds),
                 .latexIsBlock: true,
-                .foregroundColor: NSColor.clear,
+                .foregroundColor: PlatformColor.clear,
                 .font: ctx.latexMarkerFont,
                 .kern: imageBounds.width - HeadingHelpers.textWidth(anchorChar, font: ctx.latexMarkerFont)
             ]))
@@ -269,7 +273,7 @@ extension MarkdownStyler {
                 let trailingRange = NSRange(location: trailingStart, length: trailingLength)
                 let trailingText = ctx.nsText.substring(with: trailingRange)
                 attrs.append((trailingRange, [
-                    .foregroundColor: NSColor.clear,
+                    .foregroundColor: PlatformColor.clear,
                     .font: ctx.latexMarkerFont,
                     .kern: -HeadingHelpers.textWidth(trailingText, font: ctx.latexMarkerFont)
                 ]))
@@ -280,7 +284,7 @@ extension MarkdownStyler {
                     ? markerTexts[index]
                     : ctx.nsText.substring(with: markerRange)
                 attrs.append((markerRange, [
-                    .foregroundColor: NSColor.clear,
+                    .foregroundColor: PlatformColor.clear,
                     .font: ctx.latexMarkerFont,
                     .kern: -HeadingHelpers.textWidth(markerText, font: ctx.latexMarkerFont)
                 ]))
@@ -293,7 +297,7 @@ extension MarkdownStyler {
                 let preTokenRange = NSRange(location: paraRange.location, length: preTokenLength)
                 let preTokenText = ctx.nsText.substring(with: preTokenRange)
                 attrs.append((preTokenRange, [
-                    .foregroundColor: NSColor.clear,
+                    .foregroundColor: PlatformColor.clear,
                     .font: ctx.latexMarkerFont,
                     .kern: -HeadingHelpers.textWidth(preTokenText, font: ctx.latexMarkerFont)
                 ]))
@@ -307,7 +311,7 @@ extension MarkdownStyler {
             attrs.append((paraRange, [.paragraphStyle: para]))
             attrs.append((token.range, [
                 .latexImage: image,
-                .latexBounds: NSValue(rect: imageBounds),
+                .latexBounds: NSValue.cgRectValue(imageBounds),
                 .latexIsBlock: true,
                 .latexBlockOffsetY: baseLineHeight + imageGap
             ]))
@@ -329,7 +333,7 @@ extension MarkdownStyler {
         let hrPattern = "^[ \\t]*-{3,}[ \\t]*$"
         if let hrRegex = try? NSRegularExpression(pattern: hrPattern, options: [.anchorsMatchLines]) {
             for hrMatch in hrRegex.matches(in: ctx.text, range: ctx.fullRange) {
-                attrs.append((hrMatch.range, [.foregroundColor: NSColor.clear]))
+                attrs.append((hrMatch.range, [.foregroundColor: PlatformColor.clear]))
                 attrs.append((hrMatch.range, [
                     .strikethroughStyle: NSUnderlineStyle.thick.rawValue,
                     .strikethroughColor: ctx.configuration.theme.strikethroughColor
@@ -377,7 +381,7 @@ extension MarkdownStyler {
                 continue
             }
             let smallSize = ctx.configuration.markers.hiddenMarkerFontSize
-            let smallFont = NSFont(name: ctx.fontName, size: smallSize) ?? NSFont.systemFont(ofSize: smallSize)
+            let smallFont = PlatformFont(name: ctx.fontName, size: smallSize) ?? PlatformFont.systemFont(ofSize: smallSize)
             if token.kind == .link && token.markerRanges.count >= 4 {
                 let openParen = token.markerRanges[2]
                 let closeParen = token.markerRanges[3]
@@ -387,7 +391,7 @@ extension MarkdownStyler {
                 )
                 attrs.append((hideRange, [
                     .font: smallFont,
-                    .foregroundColor: NSColor.clear
+                    .foregroundColor: PlatformColor.clear
                 ]))
             }
             for m in token.markerRanges {

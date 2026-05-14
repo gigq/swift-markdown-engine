@@ -13,7 +13,11 @@
 //  override individual fields without forking the engine.
 //
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 
 // MARK: - Top-level Configuration

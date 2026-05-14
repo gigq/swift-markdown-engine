@@ -7,7 +7,11 @@
 //  Image embed (`![[...]]`) styling and layout.
 //
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 
 extension MarkdownStyler {
@@ -31,7 +35,7 @@ extension MarkdownStyler {
                 // Determine max width from text container
                 let maxWidth: CGFloat = {
                     if let tc = ctx.layoutBridge?.firstTextContainer {
-                        let w = tc.containerSize.width - tc.lineFragmentPadding * 2
+                        let w = tc.size.width - tc.lineFragmentPadding * 2
                         if w > 0 && w < imageEmbedConfig.unreasonableMaxWidth { return w }
                     }
                     return imageEmbedConfig.fallbackMaxWidth

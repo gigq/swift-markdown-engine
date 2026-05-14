@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  HighlighterSwiftBridge.swift
 //  MarkdownEngineCodeBlocks
@@ -174,3 +175,5 @@ public final class HighlighterSwiftBridge: SyntaxHighlighter, @unchecked Sendabl
         return nil
     }
 }
+
+#endif
