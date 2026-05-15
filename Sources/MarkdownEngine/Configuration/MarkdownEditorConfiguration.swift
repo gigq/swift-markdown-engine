@@ -314,28 +314,38 @@ public struct BlockLatexStyle: Sendable {
     public var paragraphSpacing: CGFloat
     /// Extra bottom padding added to single-letter formulas to avoid clipping.
     public var singleLetterPaddingBottom: CGFloat
+    /// Multiplier on `baseFont.pointSize` used as the LaTeX font size.
+    /// SwiftMath's Latin Modern Math glyphs render visually smaller than
+    /// system fonts at the same nominal point size; 1.25 brings the math
+    /// x-height roughly inline with body text.
+    public var fontScale: CGFloat
 
     public init(
         paragraphSpacingBefore: CGFloat = 16,
         paragraphSpacing: CGFloat = 20,
-        singleLetterPaddingBottom: CGFloat = 1.0
+        singleLetterPaddingBottom: CGFloat = 1.0,
+        fontScale: CGFloat = 1.25
     ) {
         self.paragraphSpacingBefore = paragraphSpacingBefore
         self.paragraphSpacing = paragraphSpacing
         self.singleLetterPaddingBottom = singleLetterPaddingBottom
+        self.fontScale = fontScale
     }
 
     public static let `default` = BlockLatexStyle()
 }
 
-/// Reserved for future inline-LaTeX (`$...$`) tuning. Currently has no
-/// effect; inline LaTeX inherits font size from the surrounding context.
+/// Inline-LaTeX `$...$` styling. Currently only carries a font-size
+/// multiplier — inline math sits at the body baseline so the scale
+/// applies on top of the surrounding heading context.
 public struct InlineLatexStyle: Sendable {
-    /// Reserved for future inline-LaTeX tuning — currently the engine inherits
-    /// font size from the surrounding heading context.
-    public var placeholder: Void
+    /// Multiplier on the inline LaTeX font size for the same reason
+    /// `BlockLatexStyle.fontScale` exists.
+    public var fontScale: CGFloat
 
-    public init() { self.placeholder = () }
+    public init(fontScale: CGFloat = 1.25) {
+        self.fontScale = fontScale
+    }
 
     public static let `default` = InlineLatexStyle()
 }
