@@ -122,15 +122,19 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         let caretLoc = min(textView.selectedRange.location, nsString.length)
         let caretParagraph = nsString.paragraphRange(for: NSRange(location: caretLoc, length: 0))
 
+        // Restyle the caret's paragraph plus every paragraph that contains
+        // a markdown token. Without this, a paste that drops several
+        // paragraphs into the document at once would only restyle the
+        // paragraph the caret lands in — inline `$x$` math + bracket
+        // block-LaTeX in adjacent paragraphs would all stay default-styled
+        // until the note was reopened. Restyle is cheap (setAttributes +
+        // addAttribute per paragraph); doing it for every
+        // tokens-containing paragraph stays bounded by the markdown
+        // density of the document.
         let parsed = ParsedDocument.parse(sourceText)
         var paragraphScope: [NSRange] = [caretParagraph]
         for token in parsed.tokens {
-            switch token.kind {
-            case .blockLatex, .codeBlock, .tableRow, .tableSeparator, .blockquote:
-                paragraphScope.append(nsString.paragraphRange(for: token.range))
-            default:
-                break
-            }
+            paragraphScope.append(nsString.paragraphRange(for: token.range))
         }
 
         let style = TextStylingService.makeBaseFontAndStyle(
