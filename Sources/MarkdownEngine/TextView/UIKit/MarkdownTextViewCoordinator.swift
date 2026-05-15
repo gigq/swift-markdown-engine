@@ -156,6 +156,12 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
             configuration: configuration
         )
 
+        // UITextView occasionally swaps its `textLayoutManager` during
+        // text edits too (not just responder transitions). The reinstall
+        // is idempotent and only invalidates layout when the delegate
+        // actually had been orphaned.
+        mdTextView.ensureLayoutDelegateAttached()
+
         // Propagate the storage-form text (with `[[Name|<id>]]` hydrated)
         // back to the binding so the embedder persists the right thing.
         let storageState = WikiLinkService.makeStorageState(

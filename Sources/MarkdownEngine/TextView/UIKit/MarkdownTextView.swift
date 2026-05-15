@@ -42,6 +42,14 @@ final class MarkdownTextView: UITextView {
         reinstallLayoutDelegate()
     }
 
+    /// Idempotent reinstall of the layout-manager delegate. Safe to call
+    /// repeatedly — only invalidates layout when the delegate actually had
+    /// been swapped away. Used from responder transitions and after every
+    /// edit-time restyle.
+    func ensureLayoutDelegateAttached() {
+        reinstallLayoutDelegate()
+    }
+
     private func reinstallLayoutDelegate() {
         guard let delegate = markdownLayoutDelegate,
               let textLayoutManager = textLayoutManager else { return }
