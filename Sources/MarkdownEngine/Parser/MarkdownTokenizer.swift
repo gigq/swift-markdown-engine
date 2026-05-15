@@ -36,16 +36,24 @@ private extension MarkdownTokenizer {
         pattern: "`([^`\\n]+)`",
         options: []
     )
+    /// Block LaTeX `$$…$$`. Lazy `(.+?)` lets it handle multiple blocks in
+    /// the same doc; matching is anchored to line boundaries so a stray `$$`
+    /// inside a paragraph doesn't pair with the next standalone block's
+    /// closing `$$` and swallow everything in between. Uses `[ \t]*` rather
+    /// than `\s*` because `\s` matches newlines in ICU regex, which would
+    /// let the open-marker line consume blank lines and shift `markerRanges`
+    /// off the actual `$$` pair.
     static let blockLatexRegex = try! NSRegularExpression(
-        pattern: #"(?s)(?<!\$)\$\$(.+?)\$\$"#,
+        pattern: #"(?m)^\$\$[ \t]*$\n([\s\S]+?)\n^[ \t]*\$\$[ \t]*$"#,
         options: []
     )
     /// Alternate block-LaTeX delimiter: `\[ … \]` (the literal two-character
-    /// `\[` and `\]` markers). GFM-style equation blocks lifted from LaTeX
-    /// source. The content match is `(.+?)` non-greedy to handle nested
-    /// braces in formulas.
+    /// `\[` and `\]` markers). Standalone-paragraph anchoring is required —
+    /// without it, a stray inline `\[` (e.g. an escaped-bracket link like
+    /// `\[not a link](...)`) pairs with the next real `\]` and swallows
+    /// every intervening line as math content.
     static let blockLatexBracketRegex = try! NSRegularExpression(
-        pattern: #"(?s)\\\[(.+?)\\\]"#,
+        pattern: #"(?m)^\\\[[ \t]*$\n([\s\S]+?)\n^[ \t]*\\\][ \t]*$"#,
         options: []
     )
     static let inlineLatexRegex = try! NSRegularExpression(
