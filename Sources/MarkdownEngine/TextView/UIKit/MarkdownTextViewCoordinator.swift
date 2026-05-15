@@ -110,11 +110,28 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         guard let mdTextView = textView as? MarkdownTextView else { return }
         guard !mdTextView.isPerformingProgrammaticEdit else { return }
 
-        // Re-style only the paragraph the caret is currently in. Cheap and
-        // keeps unrelated paragraphs from re-flowing while the user types.
-        let nsString = (textView.text ?? "") as NSString
+        // Re-style the paragraph the caret is in, *plus* the paragraph
+        // range of every multi-line block token (block LaTeX, fenced code,
+        // tables, blockquotes). Without the expansion, a paste of
+        // `\[\n…\n\]` would only restyle the line the caret ends up in —
+        // the other two lines stay default-styled and the formula doesn't
+        // render until the note is closed and reopened (which triggers a
+        // full-document rebuild via makeUIView).
+        let sourceText = textView.text ?? ""
+        let nsString = sourceText as NSString
         let caretLoc = min(textView.selectedRange.location, nsString.length)
-        let paragraphRange = nsString.paragraphRange(for: NSRange(location: caretLoc, length: 0))
+        let caretParagraph = nsString.paragraphRange(for: NSRange(location: caretLoc, length: 0))
+
+        let parsed = ParsedDocument.parse(sourceText)
+        var paragraphScope: [NSRange] = [caretParagraph]
+        for token in parsed.tokens {
+            switch token.kind {
+            case .blockLatex, .codeBlock, .tableRow, .tableSeparator, .blockquote:
+                paragraphScope.append(nsString.paragraphRange(for: token.range))
+            default:
+                break
+            }
+        }
 
         let style = TextStylingService.makeBaseFontAndStyle(
             fontName: fontName,
@@ -123,7 +140,7 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         )
         TextStylingService.restyle(
             textView: mdTextView,
-            paragraphCandidates: [paragraphRange],
+            paragraphCandidates: paragraphScope,
             baseFont: style.font,
             paragraphStyle: style.style,
             caretLocation: caretLoc,
@@ -131,6 +148,7 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
             wikiLinkIDProvider: { [weak self] range in
                 self?.wikiLinkID(for: range)
             },
+            precomputedTokens: parsed.tokens,
             configuration: configuration
         )
 
