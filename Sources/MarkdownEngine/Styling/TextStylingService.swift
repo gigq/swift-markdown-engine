@@ -118,6 +118,72 @@ struct TextStylingService {
     }
     #endif
 
+    #if canImport(UIKit)
+    /// UIKit overload of `restyle`. Walks the same paragraph-scoped attribute
+    /// updates the Mac path does; skips `LayoutBridge` (iOS doesn't use the
+    /// rendering-attribute path for spell-check) and the
+    /// `NativeTextView.ensureVisibleLayout()` nudge (UITextView keeps its
+    /// own layout in sync via the layout manager).
+    static func restyle(
+        textView: UITextView,
+        paragraphCandidates: [NSRange],
+        baseFont: PlatformFont,
+        paragraphStyle: NSMutableParagraphStyle,
+        caretLocation: Int,
+        activeTokenIndices: Set<Int>,
+        wikiLinkIDProvider: (NSRange) -> String? = { _ in nil },
+        precomputedTokens: [MarkdownToken]? = nil,
+        configuration: MarkdownEditorConfiguration = .default
+    ) {
+        let paragraphs = normalize(paragraphCandidates)
+
+        textView.typingAttributes = makeBaseTypingAttributes(
+            font: baseFont,
+            paragraphStyle: paragraphStyle,
+            theme: configuration.theme
+        )
+
+        guard !paragraphs.isEmpty else {
+            textView.setNeedsDisplay()
+            return
+        }
+
+        let sourceText = textView.text ?? ""
+        let styledRanges = MarkdownStyler.styleAttributes(
+            text: sourceText,
+            fontName: baseFont.fontName,
+            fontSize: baseFont.pointSize,
+            caretLocation: caretLocation,
+            activeTokenIndices: activeTokenIndices,
+            wikiLinkIDProvider: wikiLinkIDProvider,
+            precomputedTokens: precomputedTokens,
+            scopedRanges: paragraphs,
+            configuration: configuration
+        )
+
+        let storage = textView.textStorage
+        storage.beginEditing()
+        for paragraph in paragraphs {
+            let clamped = NSIntersectionRange(paragraph, NSRange(location: 0, length: storage.length))
+            guard clamped.length > 0 else { continue }
+            storage.setAttributes([
+                .font: baseFont,
+                .foregroundColor: configuration.theme.bodyText,
+                .paragraphStyle: paragraphStyle
+            ], range: clamped)
+            storage.removeAttribute(.link, range: clamped)
+            for (range, attrs) in styledRanges where NSIntersectionRange(range, clamped).length > 0 {
+                let clippedRange = NSIntersectionRange(range, clamped)
+                for (key, value) in attrs {
+                    storage.addAttribute(key, value: value, range: clippedRange)
+                }
+            }
+        }
+        storage.endEditing()
+        textView.setNeedsDisplay()
+    }
+    #endif
+
     private static func normalize(_ candidates: [NSRange]) -> [NSRange] {
         var result: [NSRange] = []
         for candidate in candidates where candidate.location != NSNotFound && candidate.length > 0 {
