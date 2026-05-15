@@ -42,10 +42,18 @@ final class MarkdownTextView: UITextView {
         reinstallLayoutDelegate()
     }
 
-    /// Idempotent reinstall of the layout-manager delegate. Safe to call
-    /// repeatedly — only invalidates layout when the delegate actually had
-    /// been swapped away. Used from responder transitions and after every
-    /// edit-time restyle.
+    /// Always re-attaches the layout-manager delegate and force-invalidates
+    /// the document range. Called from responder transitions and after
+    /// every edit-time restyle. The unconditional invalidate is necessary
+    /// because TextKit 2 sometimes creates fragments mid-edit (while
+    /// `storage.beginEditing()…endEditing()` is in flight) — if the
+    /// `textLayoutManager` is swapped *during* the edit (which UITextView
+    /// does on iOS 26 for reasons that aren't documented), those
+    /// just-created fragments are vanilla `NSTextLayoutFragment` instances
+    /// and our `drawLatexImages` / `drawTaskCheckboxes` overrides never
+    /// run. Forcing the invalidate after re-attaching makes TextKit toss
+    /// those fragments out and ask the delegate again, which now hands
+    /// back `MarkdownTextLayoutFragment` instances.
     func ensureLayoutDelegateAttached() {
         reinstallLayoutDelegate()
     }
@@ -53,10 +61,8 @@ final class MarkdownTextView: UITextView {
     private func reinstallLayoutDelegate() {
         guard let delegate = markdownLayoutDelegate,
               let textLayoutManager = textLayoutManager else { return }
-        if textLayoutManager.delegate !== delegate {
-            textLayoutManager.delegate = delegate
-            textLayoutManager.invalidateLayout(for: textLayoutManager.documentRange)
-        }
+        textLayoutManager.delegate = delegate
+        textLayoutManager.invalidateLayout(for: textLayoutManager.documentRange)
     }
 
     /// Base body font used for typing attributes and as the fallback the
