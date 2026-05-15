@@ -107,6 +107,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         textView.baseFont = baseFont
         textView.font = baseFont
         textView.installCheckboxTapHandler()
+        textView.applyDefaultTextBehaviors()
 
         // Order matters: `attributedText` must be set BEFORE we attach the
         // layout-manager delegate. The setter swaps out the live
