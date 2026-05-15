@@ -120,10 +120,16 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         guard let mdTextView = textView as? MarkdownTextView else { return }
         guard !mdTextView.isPerformingProgrammaticEdit else { return }
 
+        // Restore LaTeX anchor characters before reading the text back to the
+        // binding. The styler substitutes anchor chars with U+FFFC so TextKit 2
+        // will render the attachment image; we have to reverse that here so
+        // the binding never sees a stray U+FFFC.
+        let displayText = restoreLatexAnchors(in: mdTextView.textStorage)
+
         // Propagate the storage-form text (with `[[Name|<id>]]` hydrated)
         // back to the binding so the embedder persists the right thing.
         let storageState = WikiLinkService.makeStorageState(
-            from: textView.text ?? "",
+            from: displayText,
             existingMetadata: wikiLinkMetadata,
             textStorage: mdTextView.textStorage
         )
@@ -152,6 +158,27 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
 
     public func textViewDidChangeSelection(_ textView: UITextView) {
         updateInlineSelectionCallbacks(in: textView)
+    }
+
+    /// Walk attachments in `storage`, replace each U+FFFC anchor with the
+    /// `originalChar` captured by `LatexImageAttachment`, and return the
+    /// resulting string in source/display form (no U+FFFC remaining).
+    private func restoreLatexAnchors(in storage: NSTextStorage) -> String {
+        let mutable = NSMutableString(string: storage.string)
+        var replacements: [(NSRange, String)] = []
+        storage.enumerateAttribute(
+            .attachment,
+            in: NSRange(location: 0, length: storage.length),
+            options: []
+        ) { value, range, _ in
+            guard let attachment = value as? LatexImageAttachment else { return }
+            replacements.append((range, String(attachment.originalChar)))
+        }
+        // Apply replacements back-to-front so earlier ranges stay valid.
+        for (range, source) in replacements.reversed() {
+            mutable.replaceCharacters(in: range, with: source)
+        }
+        return mutable as String
     }
 }
 #endif

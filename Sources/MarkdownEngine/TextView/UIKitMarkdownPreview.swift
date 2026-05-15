@@ -156,6 +156,18 @@ public struct UIKitMarkdownPreview: UIViewRepresentable {
                 result.addAttribute(key, value: value, range: range)
             }
         }
+        // TextKit 2 only renders an attachment when its anchor character is
+        // U+FFFC. Walk the attachments after styling and substitute the
+        // single source character at each anchor — single-character swaps
+        // don't shift any other ranges, so attribute positions stay valid.
+        var anchorRanges: [NSRange] = []
+        result.enumerateAttribute(.attachment, in: NSRange(location: 0, length: result.length), options: []) { value, range, _ in
+            guard value is LatexImageAttachment else { return }
+            anchorRanges.append(range)
+        }
+        for range in anchorRanges {
+            result.replaceCharacters(in: range, with: LatexImageAttachment.anchorString)
+        }
         return result
     }
 

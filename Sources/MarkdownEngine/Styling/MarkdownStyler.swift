@@ -262,13 +262,28 @@ extension MarkdownStyler {
 
             let anchorRange = NSRange(location: anchorLocation, length: 1)
             let anchorChar = ctx.nsText.substring(with: anchorRange)
+            // Block LaTeX / inactive image embeds: substitute the source
+            // anchor character with an NSTextAttachment so rendering survives
+            // UITextView's mid-edit `textLayoutManager` swaps on iOS 26
+            // (which previously orphaned the custom layout-fragment delegate
+            // and blanked the image). TextKit 2 only renders the attachment
+            // image when the anchor char is U+FFFC, so a separate post-styling
+            // pass swaps the source char for U+FFFC in the display storage —
+            // the original char survives on `originalChar` and is restored
+            // before the text round-trips back to the binding.
+            let attachmentBounds = CGRect(
+                x: 0,
+                y: -imageBounds.origin.y,
+                width: imageBounds.width,
+                height: imageBounds.height
+            )
+            let attachment = LatexImageAttachment(
+                image: image,
+                bounds: attachmentBounds,
+                originalChar: anchorChar.first ?? " "
+            )
             attrs.append((anchorRange, [
-                .latexImage: image,
-                .latexBounds: NSValue.cgRectValue(imageBounds),
-                .latexIsBlock: true,
-                .foregroundColor: PlatformColor.clear,
-                .font: ctx.latexMarkerFont,
-                .kern: imageBounds.width - HeadingHelpers.textWidth(anchorChar, font: ctx.latexMarkerFont)
+                .attachment: attachment
             ]))
 
             let trailingStart = anchorLocation + 1

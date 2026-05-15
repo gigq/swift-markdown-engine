@@ -49,27 +49,47 @@ final class MarkdownTextView: UITextView {
         reinstallLayoutDelegate()
     }
 
-    /// Always re-attaches the layout-manager delegate and force-invalidates
-    /// the document range. Called from responder transitions and after
-    /// every edit-time restyle. The unconditional invalidate is necessary
-    /// because TextKit 2 sometimes creates fragments mid-edit (while
-    /// `storage.beginEditing()…endEditing()` is in flight) — if the
-    /// `textLayoutManager` is swapped *during* the edit (which UITextView
-    /// does on iOS 26 for reasons that aren't documented), those
-    /// just-created fragments are vanilla `NSTextLayoutFragment` instances
-    /// and our `drawLatexImages` / `drawTaskCheckboxes` overrides never
-    /// run. Forcing the invalidate after re-attaching makes TextKit toss
-    /// those fragments out and ask the delegate again, which now hands
-    /// back `MarkdownTextLayoutFragment` instances.
+    /// Catches any `textLayoutManager` swap UITextView performed mid-edit
+    /// (paste at end-of-doc, tap-at-end, responder transitions). The earlier
+    /// `becomeFirstResponder` / `didMoveToWindow` overrides only catch a
+    /// subset of swap points; iOS 26's UITextView swaps the manager from
+    /// internal layout passes that aren't tied to any documented hook, so
+    /// we re-check on every layout. The guard makes this cheap when the
+    /// delegate is already ours.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let mgr = textLayoutManager,
+              let delegate = markdownLayoutDelegate,
+              mgr.delegate !== delegate else { return }
+        // `invalidateLayout` only, no `ensureLayout` — forcing synchronous
+        // layout from within `layoutSubviews` re-enters UIKit's layout pass
+        // and asserts. Invalidation alone is enough here because UITextView
+        // is already mid-layout and will pick up fresh fragments before
+        // drawing on this pass.
+        mgr.delegate = delegate
+        mgr.invalidateLayout(for: mgr.documentRange)
+    }
+
     func ensureLayoutDelegateAttached() {
         reinstallLayoutDelegate()
     }
 
+    /// Re-attach the layout-manager delegate, invalidate the entire
+    /// document range, and force a synchronous layout so any vanilla
+    /// `NSTextLayoutFragment` instances created during a manager swap
+    /// (before we got to re-attach) get tossed and replaced with
+    /// `MarkdownTextLayoutFragment` instances. `invalidateLayout` alone
+    /// only marks fragments dirty — TextKit 2 may not actually re-create
+    /// them until the next display cycle, and during that window the
+    /// vanilla fragments remain on screen with no decorations. `ensureLayout`
+    /// forces re-creation now. Do NOT call from `layoutSubviews` — it
+    /// re-enters layout and trips UIKit's layout-pass assertions.
     private func reinstallLayoutDelegate() {
         guard let delegate = markdownLayoutDelegate,
               let textLayoutManager = textLayoutManager else { return }
         textLayoutManager.delegate = delegate
         textLayoutManager.invalidateLayout(for: textLayoutManager.documentRange)
+        textLayoutManager.ensureLayout(for: textLayoutManager.documentRange)
     }
 
     /// Base body font used for typing attributes and as the fallback the
