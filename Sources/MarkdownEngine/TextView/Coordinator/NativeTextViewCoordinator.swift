@@ -70,35 +70,9 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
     // Skip spellcheck property setters when the state wouldn't change.
     var cachedSpellingDisabled: Bool?
 
-    struct ParsedDocument {
-        let tokens: [MarkdownToken]
-        let codeTokens: [MarkdownToken]
-        let latexTokens: [MarkdownToken]
-        let blockLatexTokens: [MarkdownToken]
-        let wikiLinkTokens: [MarkdownToken]
-        let imageEmbedTokens: [MarkdownToken]
-    }
-
-    enum InlineTokenContext {
-        case wikiLink(token: MarkdownToken)
-        case imageEmbed(token: MarkdownToken)
-
-        var token: MarkdownToken {
-            switch self {
-            case .wikiLink(let token), .imageEmbed(let token):
-                return token
-            }
-        }
-
-        var selectionKind: InlineSelectionKind {
-            switch self {
-            case .wikiLink:
-                return .wikiLink
-            case .imageEmbed:
-                return .imageEmbed
-            }
-        }
-    }
+    // `ParsedDocument` and `InlineTokenContext` are defined in
+    // `Sources/MarkdownEngine/Parser/ParsedDocument.swift` so the iOS
+    // coordinator can share them.
 
     var isImageEmbedActive: Bool = false
 

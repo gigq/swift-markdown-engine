@@ -147,24 +147,15 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
             text = storageState.storage
             lastSyncedText = storageState.storage
         }
+
+        // Phase C callbacks — keep the embedder's inline-selection state and
+        // code-block overlays in sync with the latest text + caret.
+        updateInlineSelectionCallbacks(in: textView)
+        updateCodeBlockSelection(textView: textView)
     }
 
     public func textViewDidChangeSelection(_ textView: UITextView) {
-        let storage = textView.textStorage
-        let caret = textView.selectedRange.location
-        guard caret <= storage.length else {
-            isWikiLinkActive = false
-            onInlineSelectionChange?(nil)
-            return
-        }
-
-        let scan = max(0, min(caret, storage.length - 1))
-        if storage.length > 0 {
-            let id = storage.attribute(.wikiLinkID, at: scan, effectiveRange: nil) as? String
-            isWikiLinkActive = id != nil
-        } else {
-            isWikiLinkActive = false
-        }
+        updateInlineSelectionCallbacks(in: textView)
     }
 }
 #endif
