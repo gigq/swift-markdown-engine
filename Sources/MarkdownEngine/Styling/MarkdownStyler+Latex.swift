@@ -82,20 +82,31 @@ extension MarkdownStyler {
                 }
             } else {
                 if let entry = ctx.services.latex.render(latex: latexContent, fontSize: latexFontSize, theme: ctx.configuration.theme) {
-                    let imageBounds = CGRect(x: 0, y: entry.baselineOffset, width: entry.size.width, height: entry.size.height)
                     let contentLength = token.contentRange.length
                     let tinyDollarWidth = HeadingHelpers.textWidth("$", font: ctx.latexMarkerFont)
                     let baseDollarWidth = HeadingHelpers.textWidth("$", font: ctx.baseFont)
 
                     if contentLength > 0 {
                         let firstCharRange = NSRange(location: token.contentRange.location, length: 1)
-                        let firstChar = ctx.nsText.substring(with: firstCharRange)
+                        let firstChar = ctx.nsText.substring(with: firstCharRange).first ?? " "
+                        // Migrate to the NSTextAttachment + U+FFFC anchor path
+                        // so iOS edit-mode survives UITextView's mid-edit
+                        // textLayoutManager swap. Bounds match the prior
+                        // custom-fragment-draw geometry (baselineOffset maps
+                        // to a negative-y origin in attachment text coords).
+                        let attachmentBounds = CGRect(
+                            x: 0,
+                            y: -entry.baselineOffset,
+                            width: entry.size.width,
+                            height: entry.size.height
+                        )
+                        let attachment = LatexImageAttachment(
+                            image: entry.image,
+                            bounds: attachmentBounds,
+                            originalChar: firstChar
+                        )
                         attrs.append((firstCharRange, [
-                            .latexImage: entry.image,
-                            .latexBounds: NSValue.cgRectValue(imageBounds),
-                            .foregroundColor: PlatformColor.clear,
-                            .font: ctx.latexMarkerFont,
-                            .kern: entry.size.width - HeadingHelpers.textWidth(firstChar, font: ctx.latexMarkerFont)
+                            .attachment: attachment
                         ]))
 
                         if contentLength > 1 {
