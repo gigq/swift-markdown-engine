@@ -181,7 +181,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             return
         }
 
-        coordinator.rebuildTextStorageAndStyle(textView, from: text, invalidateLayout: isDocumentSwitch || fontChanged)
+        coordinator.rebuildTextStorageAndStyle(textView, from: text)
         coordinator.didInitialFormatting = true
     }
 
@@ -208,7 +208,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             from: updated,
             existingMetadata: coordinator.wikiLinkMetadata,
             textStorage: textView.textStorage
-        ).storage, invalidateLayout: true)
+        ).storage)
     }
 
     private func installLayoutDelegate(
