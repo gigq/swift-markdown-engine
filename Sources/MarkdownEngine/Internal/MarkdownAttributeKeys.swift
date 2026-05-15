@@ -15,6 +15,12 @@ extension NSAttributedString.Key {
     static let latexBounds = NSAttributedString.Key("LatexImageBounds")
     static let latexIsBlock = NSAttributedString.Key("LatexIsBlock")
     static let latexBlockOffsetY = NSAttributedString.Key("LatexBlockOffsetY")
+    /// Marks a paragraph as part of a `> ` blockquote so the layout
+    /// fragment can draw a vertical rule in the left margin.
+    static let blockquoteBar = NSAttributedString.Key("MarkdownBlockquoteBar")
+    /// Marks the header row of a GFM table so the layout fragment can
+    /// draw a hairline under it.
+    static let tableHeaderRule = NSAttributedString.Key("MarkdownTableHeaderRule")
 }
 
 #if !os(macOS)

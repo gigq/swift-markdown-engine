@@ -52,14 +52,20 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         // 1. Code-block backgrounds (behind text)
         drawCodeBlockBackground(at: point, in: context)
 
-        // 2. LaTeX images (behind text — hidden markers are invisible anyway)
+        // 2. Blockquote vertical bar (in the left margin, behind text)
+        drawBlockquoteBar(at: point, in: context)
+
+        // 3. LaTeX images (behind text — hidden markers are invisible anyway)
         drawLatexImages(at: point, in: context)
 
-        // 3. Normal text
+        // 4. Normal text
         super.draw(at: point, in: context)
 
-        // 4. Task checkboxes (on top of hidden [ ]/[x] markers)
+        // 5. Task checkboxes (on top of hidden [ ]/[x] markers)
         drawTaskCheckboxes(at: point, in: context)
+
+        // 6. Table header underline (on top of text)
+        drawTableHeaderRule(at: point, in: context)
     }
 
     // MARK: - Helpers
@@ -400,6 +406,43 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
                     symbol.draw(in: iconRect)
                 }
             }
+        }
+    }
+
+    // MARK: - Blockquote vertical bar
+
+    private func drawBlockquoteBar(at point: CGPoint, in context: CGContext) {
+        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return }
+        guard ts.attribute(.blockquoteBar, at: range.location, effectiveRange: nil) != nil else { return }
+
+        let color = effectiveConfiguration.theme.mutedText
+        // Bar lives in the indent we asked the paragraph style to reserve.
+        let barWidth: CGFloat = 3
+        let barInset: CGFloat = 8
+        let x = point.x - layoutFragmentFrame.origin.x + barInset
+        let height = layoutFragmentFrame.height
+
+        PlatformGraphics.withFlippedContext(context) {
+            color.withAlphaComponent(0.6).setFill()
+            PlatformBezierPath(rect: CGRect(x: x, y: point.y, width: barWidth, height: height)).fill()
+        }
+    }
+
+    // MARK: - Table header rule
+
+    private func drawTableHeaderRule(at point: CGPoint, in context: CGContext) {
+        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return }
+        guard ts.attribute(.tableHeaderRule, at: range.location, effectiveRange: nil) != nil else { return }
+
+        let color = effectiveConfiguration.theme.mutedText
+        let lineHeight: CGFloat = 1
+        let containerWidth = textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width
+        let x = point.x - layoutFragmentFrame.origin.x
+        let y = point.y + layoutFragmentFrame.height - lineHeight
+
+        PlatformGraphics.withFlippedContext(context) {
+            color.withAlphaComponent(0.4).setFill()
+            PlatformBezierPath(rect: CGRect(x: x, y: y, width: containerWidth, height: lineHeight)).fill()
         }
     }
 }

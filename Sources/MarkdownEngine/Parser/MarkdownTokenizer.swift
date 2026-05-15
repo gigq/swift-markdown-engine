@@ -44,6 +44,30 @@ private extension MarkdownTokenizer {
         pattern: "(?<!\\$)\\$(?!\\$)([^$\\n]+?)\\$(?!\\$)",
         options: []
     )
+    static let strikethroughRegex = try! NSRegularExpression(
+        pattern: "(?<!~)~~([^~\\n]+?)~~(?!~)",
+        options: []
+    )
+    /// `> ` line prefix. Captures the leading whitespace + `>` marker so the
+    /// styler can hide it and indent the content. Matches each line
+    /// independently so nested blockquotes (`> >`) and adjacent quote lines
+    /// emit one token per line.
+    static let blockquoteLineRegex = try! NSRegularExpression(
+        pattern: #"^([ \t]*>[ \t]?)(.*)$"#,
+        options: [.anchorsMatchLines]
+    )
+    /// GFM table data row — at least one `|` separator inside, leading/
+    /// trailing `|` optional.
+    static let tableRowRegex = try! NSRegularExpression(
+        pattern: #"^[ \t]*\|?[^\r\n|]+(\|[^\r\n|]*)+\|?[ \t]*$"#,
+        options: [.anchorsMatchLines]
+    )
+    /// GFM table alignment row — `|---|---|` with optional `:` alignment
+    /// markers. Sits between the header row and the data rows.
+    static let tableSeparatorRegex = try! NSRegularExpression(
+        pattern: #"^[ \t]*\|?[ \t]*:?-{3,}:?(?:[ \t]*\|[ \t]*:?-{3,}:?)+[ \t]*\|?[ \t]*$"#,
+        options: [.anchorsMatchLines]
+    )
 }
 
 // MARK: - Tokenizer
@@ -165,6 +189,83 @@ enum MarkdownTokenizer {
                                         range: full,
                                         contentRange: content,
                                         markerRanges: [openBacktick, closeBacktick]))
+        }
+
+        // Strikethrough ~~text~~ (skip inside fenced code blocks / inline code)
+        for match in strikethroughRegex.matches(in: text, options: [], range: fullRange) {
+            let full = match.range(at: 0)
+            let isInsideCode = tokens.contains {
+                ($0.kind == .codeBlock || $0.kind == .inlineCode) &&
+                NSIntersectionRange($0.range, full).length > 0
+            }
+            if isInsideCode { continue }
+            let content = match.range(at: 1)
+            let openMarker = NSRange(location: full.location, length: 2)
+            let closeMarker = NSRange(location: full.location + full.length - 2, length: 2)
+            tokens.append(MarkdownToken(kind: .strikethrough,
+                                        range: full,
+                                        contentRange: content,
+                                        markerRanges: [openMarker, closeMarker]))
+        }
+
+        // Blockquote lines `> text` (one token per line; multi-line quotes
+        // emit consecutive tokens — the styler joins them via paragraph
+        // attributes).
+        for match in blockquoteLineRegex.matches(in: text, options: [], range: fullRange) {
+            let full = match.range(at: 0)
+            let isInsideCode = tokens.contains {
+                $0.kind == .codeBlock && NSIntersectionRange($0.range, full).length > 0
+            }
+            if isInsideCode { continue }
+            let marker = match.range(at: 1)
+            let content = match.range(at: 2)
+            tokens.append(MarkdownToken(kind: .blockquote,
+                                        range: full,
+                                        contentRange: content,
+                                        markerRanges: [marker]))
+        }
+
+        // Tables — separator row first so we can require it to "anchor" a
+        // table. A row that looks like data but isn't part of a table-shaped
+        // group still tokenizes as `.tableRow`; the styler treats orphans
+        // gracefully (no special chrome).
+        var separatorLineRanges: [NSRange] = []
+        for match in tableSeparatorRegex.matches(in: text, options: [], range: fullRange) {
+            let full = match.range(at: 0)
+            let isInsideCode = tokens.contains {
+                $0.kind == .codeBlock && NSIntersectionRange($0.range, full).length > 0
+            }
+            if isInsideCode { continue }
+            tokens.append(MarkdownToken(kind: .tableSeparator,
+                                        range: full,
+                                        contentRange: full,
+                                        markerRanges: []))
+            separatorLineRanges.append(full)
+        }
+        for match in tableRowRegex.matches(in: text, options: [], range: fullRange) {
+            let full = match.range(at: 0)
+            // Skip rows already claimed as separators.
+            if separatorLineRanges.contains(where: { $0.location == full.location && $0.length == full.length }) {
+                continue
+            }
+            let isInsideCode = tokens.contains {
+                $0.kind == .codeBlock && NSIntersectionRange($0.range, full).length > 0
+            }
+            if isInsideCode { continue }
+            // Collect each `|` glyph for the styler.
+            let line = nsText.substring(with: full) as NSString
+            var pipeMarkers: [NSRange] = []
+            var searchStart = 0
+            while searchStart < line.length {
+                let found = line.range(of: "|", options: [], range: NSRange(location: searchStart, length: line.length - searchStart))
+                if found.location == NSNotFound { break }
+                pipeMarkers.append(NSRange(location: full.location + found.location, length: 1))
+                searchStart = found.location + 1
+            }
+            tokens.append(MarkdownToken(kind: .tableRow,
+                                        range: full,
+                                        contentRange: full,
+                                        markerRanges: pipeMarkers))
         }
 
         // Inline LaTeX $formula$

@@ -23,6 +23,7 @@ enum MarkdownTokenKind {
     case italic
     case boldItalic
     case bold
+    case strikethrough
     case link
     case wikiLink
     case heading
@@ -31,6 +32,9 @@ enum MarkdownTokenKind {
     case blockLatex
     case inlineLatex
     case imageEmbed
+    case blockquote
+    case tableRow
+    case tableSeparator
 }
 
 struct MarkdownToken {
