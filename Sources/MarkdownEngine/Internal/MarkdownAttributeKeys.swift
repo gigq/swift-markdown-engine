@@ -18,9 +18,6 @@ extension NSAttributedString.Key {
     /// Marks a paragraph as part of a `> ` blockquote so the layout
     /// fragment can draw a vertical rule in the left margin.
     static let blockquoteBar = NSAttributedString.Key("MarkdownBlockquoteBar")
-    /// Marks the header row of a GFM table so the layout fragment can
-    /// draw a hairline under it.
-    static let tableHeaderRule = NSAttributedString.Key("MarkdownTableHeaderRule")
     /// Marks the (hidden) `-` / `*` / `+` marker of an unordered list
     /// item so the layout fragment can paint a `•` bullet glyph in its
     /// place. Ordered-list numbers stay as plain text and don't get this
@@ -35,10 +32,6 @@ extension NSAttributedString.Key {
     /// layout fragment paints a full-container-width line in place of
     /// the (hidden) source characters.
     static let horizontalRule = NSAttributedString.Key("MarkdownHorizontalRule")
-    /// Marks a table row (header or data) so the layout fragment draws a
-    /// left rail in the gutter, matching the blockquote rail. Unifies
-    /// block-element chrome — blockquote rail = table rail.
-    static let tableRail = NSAttributedString.Key("MarkdownTableRail")
 }
 
 #if !os(macOS)

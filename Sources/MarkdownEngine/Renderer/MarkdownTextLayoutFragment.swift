@@ -55,10 +55,6 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         // 2. Blockquote vertical bar (in the left margin, behind text)
         drawBlockquoteBar(at: point, in: context)
 
-        // 2b. Table left rail — same chrome treatment as blockquote so
-        // both block elements share one visual language.
-        drawTableRail(at: point, in: context)
-
         // 2c. Horizontal rules — full-container-width hairline.
         drawHorizontalRule(at: point, in: context)
 
@@ -73,9 +69,6 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
 
         // 6. Unordered list bullets (on top of hidden -/*/+ markers)
         drawListBullets(at: point, in: context)
-
-        // 7. Table header underline (on top of text)
-        drawTableHeaderRule(at: point, in: context)
     }
 
     // MARK: - Helpers
@@ -480,23 +473,6 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         }
     }
 
-    // MARK: - Table left rail
-
-    private func drawTableRail(at point: CGPoint, in context: CGContext) {
-        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return }
-        guard ts.attribute(.tableRail, at: range.location, effectiveRange: nil) != nil else { return }
-
-        let color = effectiveConfiguration.theme.mutedText
-        let barWidth: CGFloat = 3
-        let barInset: CGFloat = 8
-        let x = point.x - layoutFragmentFrame.origin.x + barInset
-        let height = layoutFragmentFrame.height
-
-        PlatformGraphics.withFlippedContext(context) {
-            color.withAlphaComponent(0.6).setFill()
-            PlatformBezierPath(rect: CGRect(x: x, y: point.y, width: barWidth, height: height)).fill()
-        }
-    }
 
     // MARK: - Horizontal rule
 
@@ -516,23 +492,6 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         }
     }
 
-    // MARK: - Table header rule
-
-    private func drawTableHeaderRule(at point: CGPoint, in context: CGContext) {
-        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return }
-        guard ts.attribute(.tableHeaderRule, at: range.location, effectiveRange: nil) != nil else { return }
-
-        let color = effectiveConfiguration.theme.mutedText
-        let lineHeight: CGFloat = 1
-        let containerWidth = textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width
-        let x = point.x - layoutFragmentFrame.origin.x
-        let y = point.y + layoutFragmentFrame.height - lineHeight
-
-        PlatformGraphics.withFlippedContext(context) {
-            color.withAlphaComponent(0.4).setFill()
-            PlatformBezierPath(rect: CGRect(x: x, y: y, width: containerWidth, height: lineHeight)).fill()
-        }
-    }
 }
 
 // MARK: - Layout Manager Delegate

@@ -115,7 +115,14 @@ extension MarkdownStyler {
                         : monospaceFont(weight: .regular, size: ctx.baseFont.pointSize)
 
                     var rowAttrs: [NSAttributedString.Key: Any] = [.font: rowFont]
-                    if isHeader { rowAttrs[.tableHeaderRule] = true }
+                    if isHeader {
+                        // Native underline replaces the previous custom-fragment
+                        // draw — covers the header text rather than the full
+                        // container width, but that's a small visual delta and
+                        // it survives any layout-manager swap on iOS.
+                        rowAttrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                        rowAttrs[.underlineColor] = ctx.configuration.theme.mutedText.withAlphaComponent(0.4)
+                    }
                     attrs.append((token.range, rowAttrs))
 
                     // Mute `|` separators so the data reads cleanly.
