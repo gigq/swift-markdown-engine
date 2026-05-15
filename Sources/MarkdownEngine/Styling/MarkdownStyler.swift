@@ -177,6 +177,7 @@ enum MarkdownStyler {
         result += styleHorizontalRules(ctx)
         result += styleIncompleteLinkBrackets(ctx)
         result += styleTaskCheckboxes(ctx)
+        result += styleListBullets(ctx)
         result += shrinkInactiveMarkers(ctx)
         return result
     }

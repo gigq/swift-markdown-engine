@@ -21,6 +21,11 @@ extension NSAttributedString.Key {
     /// Marks the header row of a GFM table so the layout fragment can
     /// draw a hairline under it.
     static let tableHeaderRule = NSAttributedString.Key("MarkdownTableHeaderRule")
+    /// Marks the (hidden) `-` / `*` / `+` marker of an unordered list
+    /// item so the layout fragment can paint a `•` bullet glyph in its
+    /// place. Ordered-list numbers stay as plain text and don't get this
+    /// attribute.
+    static let listBullet = NSAttributedString.Key("MarkdownListBullet")
 }
 
 #if !os(macOS)

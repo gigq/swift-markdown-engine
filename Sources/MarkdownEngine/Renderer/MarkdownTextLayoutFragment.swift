@@ -64,7 +64,10 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         // 5. Task checkboxes (on top of hidden [ ]/[x] markers)
         drawTaskCheckboxes(at: point, in: context)
 
-        // 6. Table header underline (on top of text)
+        // 6. Unordered list bullets (on top of hidden -/*/+ markers)
+        drawListBullets(at: point, in: context)
+
+        // 7. Table header underline (on top of text)
         drawTableHeaderRule(at: point, in: context)
     }
 
@@ -405,6 +408,37 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
                 ) {
                     symbol.draw(in: iconRect)
                 }
+            }
+        }
+    }
+
+    // MARK: - Unordered list bullet
+
+    private func drawListBullets(at point: CGPoint, in context: CGContext) {
+        guard let ts = textStorage, let range = fragmentNSRange, range.length > 0 else { return }
+
+        PlatformGraphics.withFlippedContext(context) {
+            ts.enumerateAttribute(.listBullet, in: range, options: []) { [weak self] value, attrRange, _ in
+                guard let self, (value as? Bool) == true else { return }
+                guard let pos = drawPosition(forDocumentCharAt: attrRange.location, point: point) else { return }
+
+                let font = (ts.attribute(.font, at: attrRange.location, effectiveRange: nil) as? PlatformFont)
+                    ?? effectiveBaseFont
+                let bullet = "•"
+                let theme = effectiveConfiguration.theme
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: theme.bodyText
+                ]
+                let glyphSize = (bullet as NSString).size(withAttributes: attributes)
+                let markerWidth = ("-" as NSString).size(withAttributes: [.font: font]).width
+
+                // Center the bullet horizontally inside the original marker
+                // cell so that hyphen / asterisk / plus all land in the same
+                // spot.
+                let x = pos.x + max(0, (markerWidth - glyphSize.width) / 2)
+                let y = pos.baselineY - font.ascender
+                (bullet as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
             }
         }
     }
