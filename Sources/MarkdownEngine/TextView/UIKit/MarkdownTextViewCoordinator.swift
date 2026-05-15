@@ -104,63 +104,21 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         wikiLinkMetadata[WikiLinkService.RangeKey(range)]?.id
     }
 
+    /// Reapply the entire attributed-string display from the binding's
+    /// current source. Called by `MarkdownTextView` on responder
+    /// transitions where TextKit 2 otherwise loses decoration fragments
+    /// (most reliably reproducible by tapping at the very end of the
+    /// note).
+    func rebuildFromCurrentBinding() {
+        guard let textView else { return }
+        rebuildTextStorageAndStyle(textView, from: text, invalidateLayout: true)
+    }
+
     // MARK: - UITextViewDelegate
 
     public func textViewDidChange(_ textView: UITextView) {
         guard let mdTextView = textView as? MarkdownTextView else { return }
         guard !mdTextView.isPerformingProgrammaticEdit else { return }
-
-        // Re-style the paragraph the caret is in, *plus* the paragraph
-        // range of every multi-line block token (block LaTeX, fenced code,
-        // tables, blockquotes). Without the expansion, a paste of
-        // `\[\n…\n\]` would only restyle the line the caret ends up in —
-        // the other two lines stay default-styled and the formula doesn't
-        // render until the note is closed and reopened (which triggers a
-        // full-document rebuild via makeUIView).
-        let sourceText = textView.text ?? ""
-        let nsString = sourceText as NSString
-        let caretLoc = min(textView.selectedRange.location, nsString.length)
-        let caretParagraph = nsString.paragraphRange(for: NSRange(location: caretLoc, length: 0))
-
-        // Restyle the caret's paragraph plus every paragraph that contains
-        // a markdown token. Without this, a paste that drops several
-        // paragraphs into the document at once would only restyle the
-        // paragraph the caret lands in — inline `$x$` math + bracket
-        // block-LaTeX in adjacent paragraphs would all stay default-styled
-        // until the note was reopened. Restyle is cheap (setAttributes +
-        // addAttribute per paragraph); doing it for every
-        // tokens-containing paragraph stays bounded by the markdown
-        // density of the document.
-        let parsed = ParsedDocument.parse(sourceText)
-        var paragraphScope: [NSRange] = [caretParagraph]
-        for token in parsed.tokens {
-            paragraphScope.append(nsString.paragraphRange(for: token.range))
-        }
-
-        let style = TextStylingService.makeBaseFontAndStyle(
-            fontName: fontName,
-            fontSize: fontSize,
-            configuration: configuration
-        )
-        TextStylingService.restyle(
-            textView: mdTextView,
-            paragraphCandidates: paragraphScope,
-            baseFont: style.font,
-            paragraphStyle: style.style,
-            caretLocation: caretLoc,
-            activeTokenIndices: [],
-            wikiLinkIDProvider: { [weak self] range in
-                self?.wikiLinkID(for: range)
-            },
-            precomputedTokens: parsed.tokens,
-            configuration: configuration
-        )
-
-        // UITextView occasionally swaps its `textLayoutManager` during
-        // text edits too (not just responder transitions). The reinstall
-        // is idempotent and only invalidates layout when the delegate
-        // actually had been orphaned.
-        mdTextView.ensureLayoutDelegateAttached()
 
         // Propagate the storage-form text (with `[[Name|<id>]]` hydrated)
         // back to the binding so the embedder persists the right thing.
@@ -172,8 +130,19 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         wikiLinkMetadata = storageState.metadata
         if storageState.storage != text {
             text = storageState.storage
-            lastSyncedText = storageState.storage
         }
+
+        // Full attributedText rebuild via the same path `makeUIView` uses.
+        // Paragraph-scoped restyling worked in the middle of the document
+        // but consistently failed at the trailing edge — pasting / tapping
+        // at the end of the document left vanilla `NSTextLayoutFragment`
+        // instances in place that bypassed our delegate's
+        // `MarkdownTextLayoutFragment`, so LaTeX images and other custom
+        // decorations disappeared as soon as the caret landed past the
+        // previous trailing newline. The full rebuild re-attributes the
+        // entire document and re-attaches the layout delegate so fresh
+        // fragments are created uniformly.
+        rebuildTextStorageAndStyle(mdTextView, from: text, invalidateLayout: false)
 
         // Phase C callbacks — keep the embedder's inline-selection state and
         // code-block overlays in sync with the latest text + caret.

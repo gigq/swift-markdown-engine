@@ -27,6 +27,13 @@ final class MarkdownTextView: UITextView {
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
+        // Tap at the end of the note was leaving `MarkdownTextLayoutFragment`
+        // instances behind that didn't draw decorations. A full
+        // attributedText rebuild via the coordinator's restyle path is the
+        // only way that's reliably re-built fragments with our delegate.
+        if let coordinator = delegate as? MarkdownTextViewCoordinator {
+            coordinator.rebuildFromCurrentBinding()
+        }
         reinstallLayoutDelegate()
         return result
     }
