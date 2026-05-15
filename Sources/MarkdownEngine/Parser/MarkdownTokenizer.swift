@@ -25,7 +25,7 @@ private extension MarkdownTokenizer {
         options: [.anchorsMatchLines]
     )
     static let taskListRegex = try! NSRegularExpression(
-        pattern: #"^([ \t]*)([-•]|\d+\.)([ \t]+)(\[[ xX]\])(?=[ \t])"#,
+        pattern: #"^([ \t]*)([-•*+]|\d+\.)([ \t]+)(\[[ xX]\])(?=[ \t])"#,
         options: [.anchorsMatchLines]
     )
     static let codeBlockRegex = try! NSRegularExpression(
@@ -38,6 +38,14 @@ private extension MarkdownTokenizer {
     )
     static let blockLatexRegex = try! NSRegularExpression(
         pattern: #"(?s)(?<!\$)\$\$(.+?)\$\$"#,
+        options: []
+    )
+    /// Alternate block-LaTeX delimiter: `\[ … \]` (the literal two-character
+    /// `\[` and `\]` markers). GFM-style equation blocks lifted from LaTeX
+    /// source. The content match is `(.+?)` non-greedy to handle nested
+    /// braces in formulas.
+    static let blockLatexBracketRegex = try! NSRegularExpression(
+        pattern: #"(?s)\\\[(.+?)\\\]"#,
         options: []
     )
     static let inlineLatexRegex = try! NSRegularExpression(
@@ -169,7 +177,28 @@ enum MarkdownTokenizer {
             let full = match.range(at: 0)
             let inCode = tokens.contains { $0.kind == .codeBlock && NSIntersectionRange($0.range, full).length > 0 }
             if inCode { continue }
-            
+
+            let content = match.range(at: 1)
+            let openMarker = NSRange(location: full.location, length: 2)
+            let closeMarker = NSRange(location: full.location + full.length - 2, length: 2)
+            tokens.append(MarkdownToken(kind: .blockLatex,
+                                        range: full,
+                                        contentRange: content,
+                                        markerRanges: [openMarker, closeMarker]))
+        }
+
+        // Block LaTeX `\[ … \]` (multiline, GFM equation block syntax)
+        for match in blockLatexBracketRegex.matches(in: text, options: [], range: fullRange) {
+            let full = match.range(at: 0)
+            let inCode = tokens.contains { $0.kind == .codeBlock && NSIntersectionRange($0.range, full).length > 0 }
+            if inCode { continue }
+            // Skip overlaps with `$$ … $$` blocks (shouldn't normally happen,
+            // but defensive).
+            let overlapsBlock = tokens.contains {
+                $0.kind == .blockLatex && NSIntersectionRange($0.range, full).length > 0
+            }
+            if overlapsBlock { continue }
+
             let content = match.range(at: 1)
             let openMarker = NSRange(location: full.location, length: 2)
             let closeMarker = NSRange(location: full.location + full.length - 2, length: 2)

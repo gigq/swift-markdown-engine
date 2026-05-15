@@ -35,9 +35,9 @@ struct MarkdownLists {
     #endif
 
     static let listRegex = try! NSRegularExpression(
-        pattern: #"^\s*((?:(\d+)\.|[-•])(?:\s+\[[ xX]\])?\s+)"#
+        pattern: #"^\s*((?:(\d+)\.|[-•*+])(?:\s+\[[ xX]\])?\s+)"#
     )
-    static let dashNoSpaceRegex = try! NSRegularExpression(pattern: #"^\s*-(?!\s)"#)
+    static let dashNoSpaceRegex = try! NSRegularExpression(pattern: #"^\s*[-*+](?!\s)"#)
     static let numberRegex = try! NSRegularExpression(pattern: #"^\s*(\d+)\.$"#)
     static let leadingWhitespaceRegex = try! NSRegularExpression(pattern: #"^\s*"#)
 
@@ -104,8 +104,8 @@ struct MarkdownLists {
             applyListMatches(orderedListRegex.matches(in: text, options: [], range: fullRange))
         }
 
-        // Bullet lists
-        let bulletListPattern = #"^([ \t]*)([-•](?:[ \t]+\[[ xX]\])?[ \t]+)(.*)$"#
+        // Bullet lists — hyphen, bullet, asterisk, plus.
+        let bulletListPattern = #"^([ \t]*)([-•*+](?:[ \t]+\[[ xX]\])?[ \t]+)(.*)$"#
         if let bulletListRegex = try? NSRegularExpression(pattern: bulletListPattern, options: [.anchorsMatchLines]) {
             applyListMatches(bulletListRegex.matches(in: text, options: [], range: fullRange))
         }
