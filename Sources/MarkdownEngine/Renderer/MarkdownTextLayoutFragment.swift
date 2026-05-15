@@ -381,6 +381,9 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
             ts.enumerateAttribute(.taskCheckbox, in: range, options: []) { [weak self] value, attrRange, _ in
                 guard let self, value != nil else { return }
                 if selectionRanges.contains(where: { NSIntersectionRange($0, attrRange).length > 0 }) { return }
+                // If a CheckboxAttachment is already rendering the glyph at this
+                // range, skip the custom-fragment draw so we don't double up.
+                if ts.attribute(.attachment, at: attrRange.location, effectiveRange: nil) is CheckboxAttachment { return }
 
                 let isChecked = (value as? Bool) ?? false
                 guard let pos = drawPosition(forDocumentCharAt: attrRange.location, point: point) else { return }
@@ -427,6 +430,14 @@ final class MarkdownTextLayoutFragment: NSTextLayoutFragment {
         PlatformGraphics.withFlippedContext(context) {
             ts.enumerateAttribute(.listBullet, in: range, options: []) { [weak self] value, attrRange, _ in
                 guard let self, (value as? Bool) == true else { return }
+                // The styler now substitutes the marker char with `•` directly
+                // so TextKit renders it natively. Skip the custom-fragment
+                // draw to avoid stacking a second `•` glyph on top.
+                if attrRange.length > 0,
+                   attrRange.location < ts.length,
+                   ts.attributedSubstring(from: NSRange(location: attrRange.location, length: 1)).string == "•" {
+                    return
+                }
                 guard let pos = drawPosition(forDocumentCharAt: attrRange.location, point: point) else { return }
 
                 let font = (ts.attribute(.font, at: attrRange.location, effectiveRange: nil) as? PlatformFont)

@@ -81,15 +81,74 @@ extension MarkdownStyler {
                     }
                 }
             }
-            if markerRange.location != NSNotFound {
+            // Build the SF Symbol checkbox image now so it can ride on the
+            // attachment that replaces the marker character. Sizing mirrors
+            // the (now-deprecated) custom-fragment draw path so the visual
+            // ends up identical to what users had before.
+            let font = ctx.baseFont
+            let ascent = max(0, font.ascender)
+            let descent = max(0, -font.descender)
+            let fontHeight = max(1, ceil(ascent + descent))
+            let markerWidth = HeadingHelpers.textWidth("[ ]", font: font)
+            let boxSize = max(1.0, min(floor(fontHeight * 1.2), floor(markerWidth * 1.2)))
+            let symbolName = isChecked ? "checkmark.square.fill" : "square"
+            let tint: PlatformColor = isChecked
+                ? ctx.configuration.theme.bodyText
+                : ctx.configuration.theme.mutedText
+            let symbol = PlatformImage.systemSymbol(
+                name: symbolName,
+                pointSize: boxSize,
+                hierarchicalTint: tint
+            )
+
+            if markerRange.location != NSNotFound, let symbol {
+                // Substitute the marker `-` itself with the checkbox attachment
+                // — that puts the glyph at column 0 of the line, matching the
+                // previous fragment-draw placement. UIKitMarkdownPreview swaps
+                // in U+FFFC after styling so TextKit 2 actually renders the
+                // attachment image (it ignores `.attachment` on regular chars).
+                let markerChar = ctx.nsText.substring(with: markerRange).first ?? "-"
+                // Center the icon vertically on the font's x-height area.
+                let attachmentY = (ascent - descent) / 2 - boxSize / 2
+                let attachment = CheckboxAttachment(
+                    image: symbol,
+                    bounds: CGRect(x: 0, y: attachmentY, width: boxSize, height: boxSize),
+                    originalChar: markerChar,
+                    isChecked: isChecked
+                )
+                attrs.append((markerRange, [
+                    .attachment: attachment,
+                    .taskCheckbox: isChecked
+                ]))
+            } else if markerRange.location != NSNotFound {
+                // Symbol lookup failed (shouldn't happen on Apple platforms,
+                // but be defensive) — fall back to hiding the marker so the
+                // line at least isn't visually broken.
                 attrs.append((markerRange, [.foregroundColor: PlatformColor.clear]))
             }
+
+            // Hide the surrounding source characters (` `, `[`, ` `/`x`, `]`)
+            // and collapse their advance so the visible width of the row is
+            // just the attachment + a separator space. We borrow the tiny-
+            // marker-font + matching-kerning trick used by the inline-LaTeX
+            // hide path: render the chars at near-zero size, then negate
+            // that tiny advance.
             if spacerRange.location != NSNotFound {
-                attrs.append((spacerRange, [.foregroundColor: PlatformColor.clear]))
+                let spacerText = ctx.nsText.substring(with: spacerRange)
+                attrs.append((spacerRange, [
+                    .foregroundColor: PlatformColor.clear,
+                    .font: ctx.latexMarkerFont,
+                    .kern: -HeadingHelpers.textWidth(spacerText, font: ctx.latexMarkerFont)
+                ]))
             }
+            // Note: `.taskCheckbox` rides on the marker (the attachment anchor)
+            // only — users tap the visible checkbox glyph, which is the
+            // attachment at column 0. The `[ ]` source range is fully hidden
+            // (zero-width via tiny font + kerning) so it can't receive taps.
             attrs.append((checkboxRange, [
-                .taskCheckbox: isChecked,
-                .foregroundColor: PlatformColor.clear
+                .foregroundColor: PlatformColor.clear,
+                .font: ctx.latexMarkerFont,
+                .kern: -HeadingHelpers.textWidth(checkboxText, font: ctx.latexMarkerFont)
             ]))
         }
         return attrs

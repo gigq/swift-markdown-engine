@@ -26,6 +26,11 @@ extension NSAttributedString.Key {
     /// place. Ordered-list numbers stay as plain text and don't get this
     /// attribute.
     static let listBullet = NSAttributedString.Key("MarkdownListBullet")
+    /// Sibling of `.listBullet` that carries the original source marker
+    /// character (`-`, `*`, `+`) as an `NSString`. Set on the substituted
+    /// `•` glyph so the coordinator can reverse the substitution back to
+    /// the source form before forwarding text to the binding.
+    static let listBulletOriginal = NSAttributedString.Key("MarkdownListBulletOriginal")
     /// Marks a `---` / `***` / `___` horizontal-rule paragraph. The
     /// layout fragment paints a full-container-width line in place of
     /// the (hidden) source characters.

@@ -70,9 +70,10 @@ extension MarkdownStyler {
                 || ctx.caretLocation == lineRange.location + lineRange.length
             if caretOnLine { continue }
 
+            let markerChar = nsText.substring(with: markerRange)
             attrs.append((markerRange, [
-                .foregroundColor: PlatformColor.clear,
-                .listBullet: true
+                .listBullet: true,
+                .listBulletOriginal: markerChar as NSString
             ]))
         }
         return attrs

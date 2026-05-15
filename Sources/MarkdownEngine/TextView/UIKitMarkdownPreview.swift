@@ -160,13 +160,28 @@ public struct UIKitMarkdownPreview: UIViewRepresentable {
         // U+FFFC. Walk the attachments after styling and substitute the
         // single source character at each anchor — single-character swaps
         // don't shift any other ranges, so attribute positions stay valid.
+        // Both LaTeX images and task checkboxes ride this path; both keep
+        // the original char on the attachment for round-trip restoration.
         var anchorRanges: [NSRange] = []
         result.enumerateAttribute(.attachment, in: NSRange(location: 0, length: result.length), options: []) { value, range, _ in
-            guard value is LatexImageAttachment else { return }
+            guard value is AnchorSubstituteAttachment else { return }
             anchorRanges.append(range)
         }
         for range in anchorRanges {
             result.replaceCharacters(in: range, with: LatexImageAttachment.anchorString)
+        }
+
+        // List bullets follow the same pattern but with a plain `•` glyph
+        // instead of a U+FFFC anchor — TextKit renders `•` natively at the
+        // current font size, so we don't need an attachment. The original
+        // source character lives on `.listBulletOriginal` for round-trip.
+        var bulletRanges: [NSRange] = []
+        result.enumerateAttribute(.listBulletOriginal, in: NSRange(location: 0, length: result.length), options: []) { value, range, _ in
+            guard value is NSString else { return }
+            bulletRanges.append(range)
+        }
+        for range in bulletRanges {
+            result.replaceCharacters(in: range, with: "•")
         }
         return result
     }

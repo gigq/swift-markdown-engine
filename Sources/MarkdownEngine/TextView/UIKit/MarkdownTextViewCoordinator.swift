@@ -161,8 +161,10 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
     }
 
     /// Walk attachments in `storage`, replace each U+FFFC anchor with the
-    /// `originalChar` captured by `LatexImageAttachment`, and return the
-    /// resulting string in source/display form (no U+FFFC remaining).
+    /// `originalChar` captured on the attachment, and return the resulting
+    /// string in source form (no U+FFFC remaining). Used for both LaTeX
+    /// images and task-list checkboxes; both attachment types conform to
+    /// `AnchorSubstituteAttachment`.
     private func restoreLatexAnchors(in storage: NSTextStorage) -> String {
         let mutable = NSMutableString(string: storage.string)
         var replacements: [(NSRange, String)] = []
@@ -171,11 +173,23 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
             in: NSRange(location: 0, length: storage.length),
             options: []
         ) { value, range, _ in
-            guard let attachment = value as? LatexImageAttachment else { return }
+            guard let attachment = value as? AnchorSubstituteAttachment else { return }
             replacements.append((range, String(attachment.originalChar)))
         }
+        // List bullets: substituted `•` chars carry their original `-`/`*`/`+`
+        // on `.listBulletOriginal`. Restore them so the binding preserves
+        // the user's source marker style.
+        storage.enumerateAttribute(
+            .listBulletOriginal,
+            in: NSRange(location: 0, length: storage.length),
+            options: []
+        ) { value, range, _ in
+            guard let original = value as? NSString else { return }
+            replacements.append((range, original as String))
+        }
         // Apply replacements back-to-front so earlier ranges stay valid.
-        for (range, source) in replacements.reversed() {
+        replacements.sort { $0.0.location > $1.0.location }
+        for (range, source) in replacements {
             mutable.replaceCharacters(in: range, with: source)
         }
         return mutable as String

@@ -26,7 +26,15 @@ import UIKit
 #endif
 import Foundation
 
-final class LatexImageAttachment: NSTextAttachment {
+/// Common interface for the attachments that hide a source character behind
+/// a U+FFFC anchor. `UIKitMarkdownPreview` looks for this protocol when it
+/// does the post-styling substitution; the coordinator looks for it when
+/// reversing the substitution before sending text back to the binding.
+protocol AnchorSubstituteAttachment: AnyObject {
+    var originalChar: Character { get }
+}
+
+final class LatexImageAttachment: NSTextAttachment, AnchorSubstituteAttachment {
     private let renderedBounds: CGRect
 
     /// The source character we substituted with U+FFFC at this position.
