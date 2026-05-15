@@ -1,12 +1,17 @@
-#if os(macOS)
 //
 //  SwiftMathBridge.swift
 //  MarkdownEngineLatex
 //
-//  Ready-made LatexRenderer conformance backed by SwiftMath.
+//  Ready-made LatexRenderer conformance backed by SwiftMath. Cross-platform:
+//  generates either an `NSImage` (macOS) or a `UIImage` (iOS / iPadOS /
+//  visionOS) via SwiftMath's `MathImage.asImage()`.
 //
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 import SwiftMath
 import MarkdownEngine
@@ -14,14 +19,14 @@ import MarkdownEngine
 /// A drop-in ``LatexRenderer`` backed by [SwiftMath].
 ///
 /// Renders both block (`$$ … $$`) and inline (`$ … $`) LaTeX strings into
-/// `NSImage`s using the Latin Modern math font. Results are cached per
-/// (latex, font size, appearance, theme color fingerprint) so repeated
+/// `PlatformImage`s using the Latin Modern math font. Results are cached
+/// per (latex, font size, appearance, theme color fingerprint) so repeated
 /// renders are free.
 ///
-/// Light/dark appearance is taken from the host editor's window
-/// effective appearance, not from `NSApp.effectiveAppearance`, so apps
-/// that force a light window when the system is in dark mode still get
-/// correctly-tinted formulas.
+/// Light/dark appearance is taken from the active window's trait collection
+/// (UIKit) or effective appearance (AppKit), so apps that force a light
+/// window when the system is in dark mode still get correctly-tinted
+/// formulas.
 ///
 /// [SwiftMath]: https://github.com/mgriebling/SwiftMath
 public final class SwiftMathBridge: LatexRenderer, @unchecked Sendable {
@@ -34,7 +39,7 @@ public final class SwiftMathBridge: LatexRenderer, @unchecked Sendable {
     }
 
     private struct CacheEntry {
-        let image: NSImage
+        let image: PlatformImage
         let size: CGSize
         let baselineOffset: CGFloat
     }
@@ -70,8 +75,7 @@ public final class SwiftMathBridge: LatexRenderer, @unchecked Sendable {
         let normalizedLatex = latex.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedLatex.isEmpty else { return nil }
 
-        let appearance = NSApp.keyWindow?.effectiveAppearance ?? NSApp.effectiveAppearance
-        let isDarkMode = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let isDarkMode = Self.isDarkAppearance()
         let textColor = isDarkMode ? theme.latexDarkModeText : theme.latexLightModeText
         let key = CacheKey(
             latex: normalizedLatex,
@@ -109,75 +113,62 @@ public final class SwiftMathBridge: LatexRenderer, @unchecked Sendable {
 
     // MARK: - Private
 
-    /// Fold an `NSColor` to a 24-bit fingerprint that's good enough to
-    /// bust the cache when the theme changes the LaTeX text color.
-    private static func colorFingerprint(_ color: NSColor) -> UInt32 {
-        guard let rgb = color.usingColorSpace(.deviceRGB) else { return 0 }
-        let r = UInt32(max(0, min(255, Int(rgb.redComponent * 255))))
-        let g = UInt32(max(0, min(255, Int(rgb.greenComponent * 255))))
-        let b = UInt32(max(0, min(255, Int(rgb.blueComponent * 255))))
+    private static func isDarkAppearance() -> Bool {
+        #if canImport(AppKit)
+        let appearance = NSApp.keyWindow?.effectiveAppearance ?? NSApp.effectiveAppearance
+        return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        #else
+        // Read from any connected window scene's trait collection. Falls back
+        // to the global `UITraitCollection.current` (which iOS keeps in sync
+        // with the foreground scene) when no scene is reachable yet.
+        if let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first {
+            return scene.traitCollection.userInterfaceStyle == .dark
+        }
+        return UITraitCollection.current.userInterfaceStyle == .dark
+        #endif
+    }
+
+    /// Fold the LaTeX text color to a 24-bit fingerprint that's good enough
+    /// to bust the cache when the theme changes the LaTeX text color.
+    private static func colorFingerprint(_ color: PlatformColor) -> UInt32 {
+        guard let rgb = color.rgbComponents() else { return 0 }
+        let r = UInt32(max(0, min(255, Int(rgb.red * 255))))
+        let g = UInt32(max(0, min(255, Int(rgb.green * 255))))
+        let b = UInt32(max(0, min(255, Int(rgb.blue * 255))))
         return (r << 16) | (g << 8) | b
     }
 
-    private func renderLatex(_ latex: String, fontSize: CGFloat, textColor: NSColor) -> CacheEntry? {
-        let mathLabel = MTMathUILabel()
-        mathLabel.latex = latex
-        mathLabel.fontSize = fontSize
-        mathLabel.textColor = textColor
-        mathLabel.textAlignment = .left
-        mathLabel.labelMode = .text
-
-        // Latin Modern Math gives the cleanest LaTeX glyphs at typical sizes.
-        if let mathFont = MTFontManager().font(withName: "latinmodern-math", size: fontSize) {
-            mathLabel.font = mathFont
-        }
-
-        mathLabel.layoutSubtreeIfNeeded()
-
-        guard let displayList = mathLabel.displayList else { return nil }
-
-        // SwiftMath skips unsupported glyphs (e.g. emoji/raw Greek), which can yield
-        // zero-sized output. Bail instead of trying to render a 0x0 image — lockFocus
-        // (used internally by NSImage drawing) crashes on zero dimensions.
-        let exactWidth = displayList.width
-        let exactHeight = displayList.ascent + displayList.descent
-        guard exactWidth > 0, exactHeight > 0 else { return nil }
-
+    private func renderLatex(_ latex: String, fontSize: CGFloat, textColor: PlatformColor) -> CacheEntry? {
         let isSimpleSingleLetter = latex.range(of: #"^[A-Za-z]{1,3}$"#, options: .regularExpression) != nil
         let paddingBottom: CGFloat = isSimpleSingleLetter ? singleLetterPaddingBottom : 0
 
-        let frameSize = CGSize(
-            width: ceil(exactWidth),
-            height: exactHeight + paddingBottom
+        var mathImage = MathImage(
+            latex: latex,
+            fontSize: fontSize,
+            textColor: textColor,
+            labelMode: .text,
+            textAlignment: .left
         )
-        mathLabel.frame = CGRect(origin: .zero, size: frameSize)
-
-        guard let image = renderLabelToImage(mathLabel, size: frameSize) else {
-            return nil
+        if paddingBottom > 0 {
+            #if canImport(AppKit)
+            mathImage.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: paddingBottom, right: 0)
+            #else
+            mathImage.contentInsets = UIEdgeInsets(top: 0, left: 0, bottom: paddingBottom, right: 0)
+            #endif
         }
+
+        let (error, image, layout) = mathImage.asImage()
+        guard error == nil, let image, let layout else { return nil }
+
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return nil }
 
         return CacheEntry(
             image: image,
-            size: frameSize,
-            baselineOffset: displayList.descent
+            size: size,
+            baselineOffset: layout.descent
         )
     }
-
-    private func renderLabelToImage(_ label: MTMathUILabel, size: CGSize) -> NSImage? {
-        // `bitmapImageRepForCachingDisplay` + `cacheDisplay(in:to:)` is the
-        // documented way to snapshot an NSView that isn't in a window. Setting
-        // `wantsLayer = true` and `layer.render(in:)` snapshots the (empty)
-        // backing layer instead of triggering MTMathUILabel's `draw(_:)`.
-        label.frame = CGRect(origin: .zero, size: size)
-        label.layoutSubtreeIfNeeded()
-
-        let image = NSImage(size: size)
-        if let rep = label.bitmapImageRepForCachingDisplay(in: label.bounds) {
-            label.cacheDisplay(in: label.bounds, to: rep)
-            image.addRepresentation(rep)
-        }
-        return image
-    }
 }
-
-#endif

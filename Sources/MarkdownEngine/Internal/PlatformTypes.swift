@@ -142,7 +142,7 @@ extension NSValue {
 extension PlatformColor {
     /// Cross-platform RGB(A) component extraction. Returns nil if the color
     /// can't be converted to a calibrated RGB space.
-    func rgbComponents() -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)? {
+    public func rgbComponents() -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)? {
         #if canImport(AppKit)
         guard let rgb = usingColorSpace(.deviceRGB) else { return nil }
         return (rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent)
