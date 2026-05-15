@@ -85,13 +85,12 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         textView.attributedText = attributed
         textView.isPerformingProgrammaticEdit = false
 
-        if let textLayoutManager = textView.textLayoutManager,
-           let delegate = layoutDelegate {
-            textLayoutManager.delegate = delegate
-        }
-
-        if invalidateLayout, let textLayoutManager = textView.textLayoutManager {
-            textLayoutManager.invalidateLayout(for: textLayoutManager.documentRange)
+        // Re-set the markdownLayoutDelegate to force the textView to
+        // re-attach it to the freshly-swapped textLayoutManager and
+        // invalidate the layout so `MarkdownTextLayoutFragment` instances
+        // get re-created with image-drawing decorations.
+        if let delegate = layoutDelegate {
+            textView.markdownLayoutDelegate = delegate
         }
 
         // Restore caret position if it was still inside the document.

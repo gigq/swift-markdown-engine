@@ -12,6 +12,45 @@
 import UIKit
 
 final class MarkdownTextView: UITextView {
+
+    /// Strong reference to the layout-manager delegate the wrapper installed
+    /// on this text view's `textLayoutManager`. UITextView replaces its
+    /// `textLayoutManager` whenever it transitions between read and edit
+    /// modes (becomes first responder, ends editing, etc.), and the new
+    /// manager comes up with a nil delegate — so decorations like
+    /// block-LaTeX images / task-checkboxes / code-block fills silently
+    /// stop drawing the moment you tap into the editor. Stashing the
+    /// delegate here lets us re-attach it on every responder transition.
+    var markdownLayoutDelegate: MarkdownLayoutManagerDelegate? {
+        didSet { reinstallLayoutDelegate() }
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        reinstallLayoutDelegate()
+        return result
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        reinstallLayoutDelegate()
+        return result
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        reinstallLayoutDelegate()
+    }
+
+    private func reinstallLayoutDelegate() {
+        guard let delegate = markdownLayoutDelegate,
+              let textLayoutManager = textLayoutManager else { return }
+        if textLayoutManager.delegate !== delegate {
+            textLayoutManager.delegate = delegate
+            textLayoutManager.invalidateLayout(for: textLayoutManager.documentRange)
+        }
+    }
+
     /// Base body font used for typing attributes and as the fallback the
     /// layout fragment reads when no per-character font is set.
     var baseFont: PlatformFont = PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize)

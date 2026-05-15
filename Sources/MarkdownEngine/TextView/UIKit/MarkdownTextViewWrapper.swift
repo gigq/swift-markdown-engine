@@ -216,14 +216,19 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         context: Context,
         baseFont: PlatformFont
     ) {
-        guard let textLayoutManager = textView.textLayoutManager else { return }
         let delegate = MarkdownLayoutManagerDelegate()
         delegate.renderContext = MarkdownRenderContext(
             configuration: configuration,
             baseFont: baseFont
         )
         context.coordinator.layoutDelegate = delegate
-        textLayoutManager.delegate = delegate
+        // Setting `markdownLayoutDelegate` on the text view also re-attaches
+        // the delegate to the current textLayoutManager and invalidates
+        // layout. It will keep re-attaching across UITextView's
+        // textLayoutManager swaps (becomeFirstResponder, resignFirstResponder,
+        // move-to-window) which is what kept `\[ … \]` invisible after
+        // tapping into the editor.
+        textView.markdownLayoutDelegate = delegate
     }
 }
 #endif
