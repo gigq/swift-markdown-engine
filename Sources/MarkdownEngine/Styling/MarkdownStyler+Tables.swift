@@ -19,6 +19,12 @@ import Foundation
 
 extension MarkdownStyler {
 
+    /// Cross-platform monospaced font lookup. Used by tables so adjacent
+    /// rows naturally column-align.
+    private static func monospaceFont(weight: PlatformFont.Weight, size: CGFloat) -> PlatformFont {
+        PlatformFont.monospacedSystemFont(ofSize: size, weight: weight)
+    }
+
     static func styleTables(_ ctx: StylingContext) -> [StyledRange] {
         var attrs: [StyledRange] = []
         let tableTokens = ctx.tokens.filter {
@@ -83,14 +89,21 @@ extension MarkdownStyler {
                             .foregroundColor: ctx.configuration.theme.mutedText
                         ]))
                     }
+                    // Use a monospaced font so adjacent rows' cells
+                    // visually line up — characters share a width, so
+                    // identical-position cells start at the same x even
+                    // without explicit tab stops.
+                    let rowFont = isHeader
+                        ? monospaceFont(weight: .semibold, size: ctx.baseFont.pointSize)
+                        : monospaceFont(weight: .regular, size: ctx.baseFont.pointSize)
+                    var rowAttrs: [NSAttributedString.Key: Any] = [
+                        .font: rowFont,
+                        .tableRail: true
+                    ]
                     if isHeader {
-                        // Bold the header cells.
-                        let headerFont = PlatformFontMaker.bold(ctx.baseFont)
-                        attrs.append((token.range, [
-                            .font: headerFont,
-                            .tableHeaderRule: true
-                        ]))
+                        rowAttrs[.tableHeaderRule] = true
                     }
+                    attrs.append((token.range, rowAttrs))
                 default:
                     break
                 }

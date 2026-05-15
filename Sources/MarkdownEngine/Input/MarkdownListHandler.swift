@@ -79,7 +79,17 @@ struct MarkdownLists {
                 let ws = nsText.substring(with: wsRange)
                 let tabCount = ws.filter { $0 == "\t" }.count
                 let spaceCount = ws.filter { $0 == " " }.count
-                let depthIndent = CGFloat(tabCount) * indentPerLevel + CGFloat(spaceCount) * spaceWidth
+                // GFM convention: every 2 leading spaces is one nesting
+                // level. The earlier `spaceCount * spaceWidth` formula
+                // counted each space as a tiny fraction of a level, so a
+                // 2-space-indented child item was only ~8pt offset from
+                // its parent — visually flat. Bumping to a full
+                // `indentPerLevel` per 2-space group lands the nest
+                // step at the same visual size as a tab-based nest.
+                let spaceLevels = spaceCount / 2
+                let leftoverSpaces = spaceCount % 2
+                let depthIndent = CGFloat(tabCount + spaceLevels) * indentPerLevel
+                    + CGFloat(leftoverSpaces) * spaceWidth
 
                 let markerString = nsText.substring(with: markerRange) as NSString
                 let markerWidth = markerString.size(withAttributes: [.font: baseFont]).width

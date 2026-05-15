@@ -26,6 +26,14 @@ extension NSAttributedString.Key {
     /// place. Ordered-list numbers stay as plain text and don't get this
     /// attribute.
     static let listBullet = NSAttributedString.Key("MarkdownListBullet")
+    /// Marks a `---` / `***` / `___` horizontal-rule paragraph. The
+    /// layout fragment paints a full-container-width line in place of
+    /// the (hidden) source characters.
+    static let horizontalRule = NSAttributedString.Key("MarkdownHorizontalRule")
+    /// Marks a table row (header or data) so the layout fragment draws a
+    /// left rail in the gutter, matching the blockquote rail. Unifies
+    /// block-element chrome — blockquote rail = table rail.
+    static let tableRail = NSAttributedString.Key("MarkdownTableRail")
 }
 
 #if !os(macOS)

@@ -334,16 +334,18 @@ extension MarkdownStyler {
 
     static func styleHorizontalRules(_ ctx: StylingContext) -> [StyledRange] {
         var attrs: [StyledRange] = []
-        let hrPattern = "^[ \\t]*-{3,}[ \\t]*$"
+        // CommonMark HR: a line of three or more `-`, `*`, or `_` chars
+        // (optionally space-separated). Source characters get hidden; the
+        // layout fragment paints a full-container-width rule via
+        // `.horizontalRule`.
+        let hrPattern = #"^[ \t]*(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$"#
         if let hrRegex = try? NSRegularExpression(pattern: hrPattern, options: [.anchorsMatchLines]) {
             for hrMatch in hrRegex.matches(in: ctx.text, range: ctx.fullRange) {
-                attrs.append((hrMatch.range, [.foregroundColor: PlatformColor.clear]))
+                if MarkdownDetection.isInsideCodeBlock(range: hrMatch.range, codeTokens: ctx.codeTokens) { continue }
                 attrs.append((hrMatch.range, [
-                    .strikethroughStyle: NSUnderlineStyle.thick.rawValue,
-                    .strikethroughColor: ctx.configuration.theme.strikethroughColor
+                    .foregroundColor: PlatformColor.clear,
+                    .horizontalRule: true
                 ]))
-                let rulePara = NSMutableParagraphStyle()
-                attrs.append((hrMatch.range, [.paragraphStyle: rulePara]))
             }
         }
         return attrs

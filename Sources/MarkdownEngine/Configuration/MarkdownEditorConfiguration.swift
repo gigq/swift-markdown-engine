@@ -252,7 +252,7 @@ public struct HeadingStyle: Sendable {
     public var topSpacingEm: [CGFloat]
 
     public init(
-        fontMultipliers: [CGFloat] = [2.0, 1.5, 1.17, 1.0, 0.83, 0.67],
+        fontMultipliers: [CGFloat] = [1.7, 1.4, 1.2, 1.05, 0.95, 0.88],
         topSpacingEm: [CGFloat] = [0.35, 0.30, 0.25, 0.20, 0.15, 0.10]
     ) {
         self.fontMultipliers = fontMultipliers
