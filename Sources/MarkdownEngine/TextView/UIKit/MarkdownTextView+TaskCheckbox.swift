@@ -5,7 +5,7 @@
 //  Lets users tap a `[ ]` / `[x]` glyph to toggle its completion state.
 //  Mirrors the Mac `NativeTextView+TaskCheckbox` mouse-click handling but
 //  goes through a `UITapGestureRecognizer` that runs alongside UITextView's
-//  built-in tap handling.
+//  built-in tap-to-position-caret recognizer.
 //
 
 #if os(iOS) || os(visionOS)
@@ -16,37 +16,47 @@ extension MarkdownTextView {
         guard checkboxTapGesture == nil else { return }
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleCheckboxTap(_:)))
         tap.cancelsTouchesInView = false
-        // Run before UITextView's own taps so we get a chance to toggle.
-        tap.delegate = nil
+        // Filter via a delegate so we *only* recognize taps that land inside
+        // a checkbox glyph; every other tap stays with UITextView's
+        // caret-positioning recognizer. Without this, the tap recognizer
+        // monopolized all taps and the keyboard never showed up.
+        let delegate = CheckboxTapDelegate(textView: self)
+        tap.delegate = delegate
+        checkboxTapDelegate = delegate
         addGestureRecognizer(tap)
         checkboxTapGesture = tap
     }
 
-    @objc private func handleCheckboxTap(_ recognizer: UITapGestureRecognizer) {
+    @objc fileprivate func handleCheckboxTap(_ recognizer: UITapGestureRecognizer) {
         guard recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
-        let storage = textStorage
-        guard storage.length > 0 else { return }
+        guard let charIndex = characterIndexForTap(at: location) else { return }
+        _ = toggleCheckbox(at: charIndex)
+    }
 
-        // Convert tap location into the textContainer's coordinate space.
+    /// Hit-test helper — returns the document character index under a tap,
+    /// or nil if the tap missed all glyphs. Used both by the tap gesture's
+    /// `should-begin` filter and by the actual toggle handler.
+    fileprivate func characterIndexForTap(at location: CGPoint) -> Int? {
         let inset = textContainerInset
         let containerPoint = CGPoint(x: location.x - inset.left, y: location.y - inset.top)
 
-        // TextKit 2 path — preferred since the rest of the renderer runs on it.
         if let textLayoutManager = textLayoutManager,
            let fragment = textLayoutManager.textLayoutFragment(for: containerPoint),
            let charIndex = characterIndex(at: containerPoint, fragment: fragment) {
-            if toggleCheckbox(at: charIndex) { return }
+            return charIndex
         }
 
-        // Fallback to the TextKit 1 layout manager (UITextView keeps one
-        // available for legacy compatibility even when `usingTextLayoutManager`
-        // was true).
-        let lm = layoutManager
-        let container = textContainer
-        let glyphIndex = lm.glyphIndex(for: containerPoint, in: container)
-        let charIndex = lm.characterIndexForGlyph(at: glyphIndex)
-        _ = toggleCheckbox(at: charIndex)
+        // Fallback to the TextKit 1 layout manager.
+        let glyphIndex = layoutManager.glyphIndex(for: containerPoint, in: textContainer)
+        return layoutManager.characterIndexForGlyph(at: glyphIndex)
+    }
+
+    fileprivate func tapLandsOnCheckbox(at location: CGPoint) -> Bool {
+        guard let charIndex = characterIndexForTap(at: location),
+              charIndex >= 0,
+              charIndex < textStorage.length else { return false }
+        return textStorage.attribute(.taskCheckbox, at: charIndex, effectiveRange: nil) != nil
     }
 
     private func characterIndex(at containerPoint: CGPoint, fragment: NSTextLayoutFragment) -> Int? {
@@ -107,11 +117,44 @@ extension MarkdownTextView {
         return true
     }
 
-    private var checkboxTapGesture: UITapGestureRecognizer? {
+    fileprivate var checkboxTapGesture: UITapGestureRecognizer? {
         get { objc_getAssociatedObject(self, &checkboxTapGestureKey) as? UITapGestureRecognizer }
         set { objc_setAssociatedObject(self, &checkboxTapGestureKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+
+    fileprivate var checkboxTapDelegate: CheckboxTapDelegate? {
+        get { objc_getAssociatedObject(self, &checkboxTapDelegateKey) as? CheckboxTapDelegate }
+        set { objc_setAssociatedObject(self, &checkboxTapDelegateKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+}
+
+/// Side-object delegate so we can filter the checkbox tap without
+/// `MarkdownTextView` having to claim conformance to
+/// `UIGestureRecognizerDelegate` (which would conflict with UITextView's
+/// own scroll-view-level conformance).
+private final class CheckboxTapDelegate: NSObject, UIGestureRecognizerDelegate {
+    weak var textView: MarkdownTextView?
+
+    init(textView: MarkdownTextView) {
+        self.textView = textView
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let textView else { return false }
+        let location = gestureRecognizer.location(in: textView)
+        return textView.tapLandsOnCheckbox(at: location)
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        // Run alongside UITextView's own taps so caret positioning continues
+        // to work for non-checkbox taps.
+        true
     }
 }
 
 private nonisolated(unsafe) var checkboxTapGestureKey: UInt8 = 0
+private nonisolated(unsafe) var checkboxTapDelegateKey: UInt8 = 0
 #endif
