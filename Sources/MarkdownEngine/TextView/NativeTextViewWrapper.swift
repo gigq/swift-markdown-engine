@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  NativeTextViewWrapper.swift
 //  MarkdownEngine
@@ -348,3 +349,5 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         return coordinator
     }
 }
+
+#endif

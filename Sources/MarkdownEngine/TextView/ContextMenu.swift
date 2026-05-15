@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  ContextMenu.swift
 //  MarkdownEngine
@@ -265,3 +266,5 @@ extension NativeTextViewWrapper.Coordinator: NSMenuItemValidation {
         }
     }
 }
+
+#endif

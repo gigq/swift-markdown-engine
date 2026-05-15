@@ -17,7 +17,11 @@
 //  via the ``WikiLinkResolver`` protocol.
 //
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 import os
 
@@ -166,6 +170,7 @@ public enum WikiLinkService {
         return (storage, metadata)
     }
 
+    #if os(macOS)
     /// Resolve a clicked link's opaque id by reading the `.wikiLinkID`
     /// attribute under the caret, falling back to the link's display string
     /// if the attribute is missing.
@@ -178,6 +183,7 @@ public enum WikiLinkService {
         }
         return nil
     }
+    #endif
 
     /// Split a single storage fragment `[[Name|<id>]]` into its display
     /// form (`[[Name]]`) and the opaque identifier.

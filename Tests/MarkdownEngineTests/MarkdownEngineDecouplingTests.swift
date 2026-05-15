@@ -10,7 +10,11 @@
 
 import Testing
 import Foundation
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 @testable import MarkdownEngine
 
 @Suite("Markdown engine decoupling")
@@ -96,7 +100,7 @@ struct MarkdownEngineDecouplingTests {
         let text = "# Heading\n\n**bold** and `code`"
         let ranges = MarkdownStyler.styleAttributes(
             text: text,
-            fontName: NSFont.systemFont(ofSize: 14).fontName,
+            fontName: PlatformFont.systemFont(ofSize: 14).fontName,
             fontSize: 14,
             caretLocation: 0,
             activeTokenIndices: [],

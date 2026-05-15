@@ -7,7 +7,11 @@
 //  Auto-detected URLs, [text](url) Markdown links, and [[Name]] wiki links.
 //
 
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 
 extension MarkdownStyler {

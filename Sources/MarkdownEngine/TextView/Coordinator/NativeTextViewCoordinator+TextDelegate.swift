@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  NativeTextViewCoordinator+TextDelegate.swift
 //  MarkdownEngine
@@ -433,3 +434,5 @@ extension NativeTextViewCoordinator {
     }
 
 }
+
+#endif

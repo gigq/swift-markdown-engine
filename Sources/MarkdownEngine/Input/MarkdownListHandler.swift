@@ -7,9 +7,15 @@
 
 // Makes list editing feel natural by continuing items, handling indentation,
 // and applying spacing/alignment that keeps lists easy to read.
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
+import Foundation
 
 struct MarkdownLists {
+    #if os(macOS)
     static func performEdit(_ textView: NSTextView, replace range: NSRange, with string: String) {
         let ns = textView.string as NSString
         let loc = min(range.location, ns.length)
@@ -26,11 +32,12 @@ struct MarkdownLists {
         textView.textStorage?.replaceCharacters(in: safeRange, with: string)
         textView.didChangeText()
     }
+    #endif
 
     static let listRegex = try! NSRegularExpression(
-        pattern: #"^\s*((?:(\d+)\.|[-•])(?:\s+\[[ xX]\])?\s+)"#
+        pattern: #"^\s*((?:(\d+)\.|[-•*+])(?:\s+\[[ xX]\])?\s+)"#
     )
-    static let dashNoSpaceRegex = try! NSRegularExpression(pattern: #"^\s*-(?!\s)"#)
+    static let dashNoSpaceRegex = try! NSRegularExpression(pattern: #"^\s*[-*+](?!\s)"#)
     static let numberRegex = try! NSRegularExpression(pattern: #"^\s*(\d+)\.$"#)
     static let leadingWhitespaceRegex = try! NSRegularExpression(pattern: #"^\s*"#)
 
@@ -44,7 +51,7 @@ struct MarkdownLists {
 
     static func paragraphAttributes(
         for text: String,
-        baseFont: NSFont,
+        baseFont: PlatformFont,
         nsText: NSString,
         fullRange: NSRange,
         listsEnabled: Bool,
@@ -97,8 +104,8 @@ struct MarkdownLists {
             applyListMatches(orderedListRegex.matches(in: text, options: [], range: fullRange))
         }
 
-        // Bullet lists
-        let bulletListPattern = #"^([ \t]*)([-•](?:[ \t]+\[[ xX]\])?[ \t]+)(.*)$"#
+        // Bullet lists — hyphen, bullet, asterisk, plus.
+        let bulletListPattern = #"^([ \t]*)([-•*+](?:[ \t]+\[[ xX]\])?[ \t]+)(.*)$"#
         if let bulletListRegex = try? NSRegularExpression(pattern: bulletListPattern, options: [.anchorsMatchLines]) {
             applyListMatches(bulletListRegex.matches(in: text, options: [], range: fullRange))
         }
@@ -107,6 +114,7 @@ struct MarkdownLists {
 
     // MARK: - Input Handling
 
+    #if os(macOS)
     static func handleInsertion(textView: NSTextView, affectedCharRange: NSRange, replacementString: String?) -> Bool {
         guard let replacementString = replacementString else { return true }
 
@@ -252,7 +260,7 @@ struct MarkdownLists {
             if currentLine.range(of: "^-{3,}$", options: .regularExpression) != nil {
                 let hrFont = (textView as? NativeTextView)?.baseFont
                     ?? textView.font
-                    ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+                    ?? PlatformFont.systemFont(ofSize: PlatformFont.systemFontSize)
                 let hyphenWidth = ("-" as NSString).size(withAttributes: [.font: hrFont]).width
                 let visibleWidth = textView.enclosingScrollView?.contentView.bounds.width
                                     ?? textView.textContainer?.containerSize.width
@@ -337,4 +345,5 @@ struct MarkdownLists {
 
         return true
     }
+    #endif
 }

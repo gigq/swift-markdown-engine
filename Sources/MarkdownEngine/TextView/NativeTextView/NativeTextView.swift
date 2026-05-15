@@ -1,3 +1,4 @@
+#if os(macOS)
 //
 //  NativeTextView.swift
 //  MarkdownEngine
@@ -72,3 +73,5 @@ final class NativeTextView: NSTextView {
 
     deinit { caretIndicatorObservation?.invalidate() }
 }
+
+#endif

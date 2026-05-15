@@ -7,7 +7,11 @@
 
 // Defines the basic Markdown building blocks the editor works with (bold,
 // links, code, LaTeX, etc.), plus shared text attributes.
+#if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 
 extension NSAttributedString.Key {
@@ -19,6 +23,7 @@ enum MarkdownTokenKind {
     case italic
     case boldItalic
     case bold
+    case strikethrough
     case link
     case wikiLink
     case heading
@@ -27,6 +32,9 @@ enum MarkdownTokenKind {
     case blockLatex
     case inlineLatex
     case imageEmbed
+    case blockquote
+    case tableRow
+    case tableSeparator
 }
 
 struct MarkdownToken {
