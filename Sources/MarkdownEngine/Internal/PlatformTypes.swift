@@ -244,11 +244,19 @@ enum PlatformScale {
         }
         return NSScreen.main?.backingScaleFactor ?? 2.0
         #else
+        #if os(visionOS)
+        if let tv = textView as? UIView,
+           tv.traitCollection.displayScale > 0 {
+            return tv.traitCollection.displayScale
+        }
+        return 2.0
+        #else
         if let tv = textView as? UIView,
            let scale = tv.window?.screen.scale {
             return scale
         }
         return UIScreen.main.scale
+        #endif
         #endif
     }
 }

@@ -30,9 +30,9 @@ extension MarkdownTextView {
         // `findInteraction?.presentFindNavigator(...)` directly.
         isFindInteractionEnabled = true
 
-        // Writing Tools (iOS 18+). Match the Mac editor's `.complete`
+        // Writing Tools (iOS 18+ / visionOS 2.4+). Match the Mac editor's `.complete`
         // behavior so the user gets in-line rewrite + the inspector panel.
-        if #available(iOS 18.0, visionOS 2.0, *) {
+        if #available(iOS 18.0, visionOS 2.4, *) {
             writingToolsBehavior = .complete
         }
     }
