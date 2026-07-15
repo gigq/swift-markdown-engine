@@ -61,6 +61,8 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
     /// resolved opaque identifier (or the display name when no resolver
     /// was supplied).
     public var onLinkClick: ((String) -> Void)?
+    /// Fires when the user clicks a rendered `![[...]]` image embed.
+    public var onImageEmbedClick: ((EmbeddedImageRequest) -> Void)?
     /// Fires whenever the caret rect inside an active wiki-link changes,
     /// so embedders can position a follow-the-caret UI.
     public var onCaretRectChange: ((CGRect) -> Void)?
@@ -83,6 +85,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         isEditable: Bool = true,
         onPasteImage: ((NSPasteboard) -> String?)? = nil,
         onLinkClick: ((String) -> Void)? = nil,
+        onImageEmbedClick: ((EmbeddedImageRequest) -> Void)? = nil,
         onCaretRectChange: ((CGRect) -> Void)? = nil,
         onInlineSelectionChange: ((InlineSelectionState?) -> Void)? = nil,
         onCodeBlockSelectionChange: (([CodeBlockSelection]) -> Void)? = nil
@@ -98,6 +101,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         self.isEditable = isEditable
         self.onPasteImage = onPasteImage
         self.onLinkClick = onLinkClick
+        self.onImageEmbedClick = onImageEmbedClick
         self.onCaretRectChange = onCaretRectChange
         self.onInlineSelectionChange = onInlineSelectionChange
         self.onCodeBlockSelectionChange = onCodeBlockSelectionChange
@@ -189,6 +193,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         context.coordinator.onCaretRectChange = onCaretRectChange
         context.coordinator.onInlineSelectionChange = onInlineSelectionChange
         context.coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
+        textView.updateImageEmbedAccessibilityActions(onActivate: onImageEmbedClick)
 
         textView.recalcOverscroll(for: scrollView)
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -223,6 +228,11 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
 
     public func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
+
+        context.coordinator.onImageEmbedClick = onImageEmbedClick
+        (textView as? NativeTextView)?.updateImageEmbedAccessibilityActions(
+            onActivate: onImageEmbedClick
+        )
 
         let isNodeSwitch = context.coordinator.documentId != documentId
         let wtActive: Bool = {
@@ -278,6 +288,9 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
             if pendingInlineReplacement.documentId == documentId,
                context.coordinator.lastAppliedInlineReplacementID != pendingInlineReplacement.id {
                 context.coordinator.applyInlineReplacement(pendingInlineReplacement, to: textView)
+                (textView as? NativeTextView)?.updateImageEmbedAccessibilityActions(
+                    onActivate: onImageEmbedClick
+                )
             }
             DispatchQueue.main.async {
                 if self.pendingInlineReplacement?.id == pendingInlineReplacement.id {
@@ -350,6 +363,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
             fontSize: fontSize,
             isWikiLinkActive: $isWikiLinkActive,
             onLinkClick: onLinkClick,
+            onImageEmbedClick: onImageEmbedClick,
             onInlineSelectionChange: onInlineSelectionChange
         )
         coordinator.documentId = documentId

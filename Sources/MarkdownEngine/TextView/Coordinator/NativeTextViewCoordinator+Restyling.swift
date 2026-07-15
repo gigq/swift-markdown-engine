@@ -83,6 +83,10 @@ extension NativeTextViewCoordinator {
             }
             tlm.ensureLayout(for: tlm.documentRange)
         }
+
+        if let nativeTextView = textView as? NativeTextView {
+            nativeTextView.updateImageEmbedAccessibilityActions(onActivate: onImageEmbedClick)
+        }
     }
 
     func restyleTextView(
@@ -111,6 +115,10 @@ extension NativeTextViewCoordinator {
             precomputedTokens: tokens,
             configuration: configuration
         )
+
+        if let nativeTextView = textView as? NativeTextView {
+            nativeTextView.updateImageEmbedAccessibilityActions(onActivate: onImageEmbedClick)
+        }
     }
 
     func parsedDocument(for text: String) -> ParsedDocument {

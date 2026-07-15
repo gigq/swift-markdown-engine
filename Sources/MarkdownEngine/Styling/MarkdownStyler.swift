@@ -211,6 +211,7 @@ extension MarkdownStyler {
         paragraphSpacing: CGFloat,
         alignment: NSTextAlignment,
         mode: RenderedStandaloneBlockMode,
+        imageEmbedReference: NSString? = nil,
         ctx: StylingContext,
         attrs: inout [StyledRange]
     ) -> Bool {
@@ -282,9 +283,13 @@ extension MarkdownStyler {
                 bounds: attachmentBounds,
                 originalChar: anchorChar.first ?? " "
             )
-            attrs.append((anchorRange, [
+            var anchorAttributes: [NSAttributedString.Key: Any] = [
                 .attachment: attachment
-            ]))
+            ]
+            if let imageEmbedReference {
+                anchorAttributes[.imageEmbedReference] = imageEmbedReference
+            }
+            attrs.append((anchorRange, anchorAttributes))
 
             let trailingStart = anchorLocation + 1
             let trailingLength = contentEnd - trailingStart

@@ -77,6 +77,7 @@ extension MarkdownStyler {
                         paragraphSpacing: imageEmbedConfig.paragraphSpacing,
                         alignment: .left,
                         mode: .collapsedSource(markerTexts: ["![[", "]]"]),
+                        imageEmbedReference: rawContent as NSString,
                         ctx: ctx,
                         attrs: &attrs
                     )

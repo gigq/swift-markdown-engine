@@ -13,6 +13,62 @@
 import AppKit
 
 extension NativeTextView {
+    func activateImageEmbedIfHit(event: NSEvent) -> Bool {
+        guard event.clickCount == 1,
+              !event.modifierFlags.contains(.option),
+              let textContainer,
+              let bridge = layoutBridge,
+              let storage = textStorage else { return false }
+        let localPoint = convert(event.locationInWindow, from: nil)
+        let containerPoint = CGPoint(
+            x: localPoint.x - textContainerOrigin.x,
+            y: localPoint.y - textContainerOrigin.y
+        )
+        var fraction: CGFloat = 0
+        let index = bridge.characterIndex(
+            for: containerPoint,
+            in: textContainer,
+            fractionOfDistanceBetweenInsertionPoints: &fraction
+        )
+        guard index != NSNotFound,
+              index < storage.length,
+              let rawContent = storage.attribute(
+                  .imageEmbedReference,
+                  at: index,
+                  effectiveRange: nil
+              ) as? String,
+              let reference = ImageEmbedReference(content: rawContent),
+              let coordinator = delegate as? NativeTextViewCoordinator,
+              let onImageEmbedClick = coordinator.onImageEmbedClick else { return false }
+        onImageEmbedClick(reference.providerRequest)
+        return true
+    }
+
+    func updateImageEmbedAccessibilityActions(
+        onActivate: ((EmbeddedImageRequest) -> Void)?
+    ) {
+        guard let onActivate else {
+            setAccessibilityCustomActions(nil)
+            return
+        }
+        var references: [ImageEmbedReference] = []
+        textStorage?.enumerateAttribute(
+            .imageEmbedReference,
+            in: NSRange(location: 0, length: textStorage?.length ?? 0)
+        ) { value, _, _ in
+            guard let rawContent = value as? String,
+                  let reference = ImageEmbedReference(content: rawContent) else { return }
+            references.append(reference)
+        }
+        let actions = references.map { reference in
+            NSAccessibilityCustomAction(name: "Preview \(reference.name)") {
+                onActivate(reference.providerRequest)
+                return true
+            }
+        }
+        setAccessibilityCustomActions(actions)
+    }
+
     func toggleTaskCheckboxIfHit(event: NSEvent) -> Bool? {
         guard let textContainer = textContainer,
               let bridge = layoutBridge,

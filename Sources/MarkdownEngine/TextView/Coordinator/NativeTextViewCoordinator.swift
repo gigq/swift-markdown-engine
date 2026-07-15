@@ -36,6 +36,7 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
     var layoutBridge: LayoutBridge?
     var layoutDelegate: MarkdownLayoutManagerDelegate?
     var onLinkClick: ((String) -> Void)?
+    var onImageEmbedClick: ((EmbeddedImageRequest) -> Void)?
     var onCaretRectChange: ((CGRect) -> Void)?
     var onInlineSelectionChange: ((InlineSelectionState?) -> Void)?
     var onCodeBlockSelectionChange: (([CodeBlockSelection]) -> Void)?
@@ -85,12 +86,14 @@ public final class NativeTextViewCoordinator: NSObject, NSTextViewDelegate {
          fontSize: CGFloat,
          isWikiLinkActive: Binding<Bool>,
          onLinkClick: ((String) -> Void)?,
+         onImageEmbedClick: ((EmbeddedImageRequest) -> Void)?,
          onInlineSelectionChange: ((InlineSelectionState?) -> Void)?) {
         _text = text
         self.fontName = fontName
         self.fontSize = fontSize
         _isWikiLinkActive = isWikiLinkActive
         self.onLinkClick = onLinkClick
+        self.onImageEmbedClick = onImageEmbedClick
         self.onCaretRectChange = nil
         self.onInlineSelectionChange = onInlineSelectionChange
         self.lastSyncedText = text.wrappedValue

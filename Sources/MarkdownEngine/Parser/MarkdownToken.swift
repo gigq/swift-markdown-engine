@@ -17,6 +17,7 @@ import Foundation
 extension NSAttributedString.Key {
     public static let wikiLinkID = NSAttributedString.Key("NodeLinkID")
     public static let taskCheckbox = NSAttributedString.Key("TaskCheckbox")
+    public static let imageEmbedReference = NSAttributedString.Key("ImageEmbedReference")
 }
 
 enum MarkdownTokenKind {

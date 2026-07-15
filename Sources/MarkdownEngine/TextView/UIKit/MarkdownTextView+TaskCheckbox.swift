@@ -12,6 +12,41 @@
 import UIKit
 
 extension MarkdownTextView {
+    func installImageEmbedTapHandler() {
+        guard imageEmbedTapGesture == nil else { return }
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleImageEmbedTap(_:)))
+        tap.cancelsTouchesInView = false
+        let delegate = ImageEmbedTapDelegate(textView: self)
+        tap.delegate = delegate
+        imageEmbedTapDelegate = delegate
+        addGestureRecognizer(tap)
+        imageEmbedTapGesture = tap
+    }
+
+    func updateImageEmbedAccessibilityActions(
+        onActivate: ((EmbeddedImageRequest) -> Void)?
+    ) {
+        guard let onActivate else {
+            accessibilityCustomActions = nil
+            return
+        }
+        var references: [ImageEmbedReference] = []
+        textStorage.enumerateAttribute(
+            .imageEmbedReference,
+            in: NSRange(location: 0, length: textStorage.length)
+        ) { value, _, _ in
+            guard let rawContent = value as? String,
+                  let reference = ImageEmbedReference(content: rawContent) else { return }
+            references.append(reference)
+        }
+        accessibilityCustomActions = references.map { reference in
+            UIAccessibilityCustomAction(name: "Preview \(reference.name)") { _ in
+                onActivate(reference.providerRequest)
+                return true
+            }
+        }
+    }
+
     func installCheckboxTapHandler() {
         guard checkboxTapGesture == nil else { return }
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleCheckboxTap(_:)))
@@ -32,6 +67,22 @@ extension MarkdownTextView {
         let location = recognizer.location(in: self)
         guard let charIndex = characterIndexForTap(at: location) else { return }
         _ = toggleCheckbox(at: charIndex)
+    }
+
+    @objc fileprivate func handleImageEmbedTap(_ recognizer: UITapGestureRecognizer) {
+        guard recognizer.state == .ended else { return }
+        let location = recognizer.location(in: self)
+        guard let charIndex = characterIndexForTap(at: location),
+              charIndex >= 0,
+              charIndex < textStorage.length,
+              let rawContent = textStorage.attribute(
+                  .imageEmbedReference,
+                  at: charIndex,
+                  effectiveRange: nil
+              ) as? String,
+              let reference = ImageEmbedReference(content: rawContent),
+              let coordinator = delegate as? MarkdownTextViewCoordinator else { return }
+        coordinator.onImageEmbedClick?(reference.providerRequest)
     }
 
     /// Hit-test helper — returns the document character index under a tap,
@@ -57,6 +108,15 @@ extension MarkdownTextView {
               charIndex >= 0,
               charIndex < textStorage.length else { return false }
         return textStorage.attribute(.taskCheckbox, at: charIndex, effectiveRange: nil) != nil
+    }
+
+    fileprivate func tapLandsOnImageEmbed(at location: CGPoint) -> Bool {
+        guard let charIndex = characterIndexForTap(at: location),
+              charIndex >= 0,
+              charIndex < textStorage.length,
+              let coordinator = delegate as? MarkdownTextViewCoordinator,
+              coordinator.onImageEmbedClick != nil else { return false }
+        return textStorage.attribute(.imageEmbedReference, at: charIndex, effectiveRange: nil) != nil
     }
 
     private func characterIndex(at containerPoint: CGPoint, fragment: NSTextLayoutFragment) -> Int? {
@@ -126,6 +186,16 @@ extension MarkdownTextView {
         get { objc_getAssociatedObject(self, &checkboxTapDelegateKey) as? CheckboxTapDelegate }
         set { objc_setAssociatedObject(self, &checkboxTapDelegateKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
     }
+
+    fileprivate var imageEmbedTapGesture: UITapGestureRecognizer? {
+        get { objc_getAssociatedObject(self, &imageEmbedTapGestureKey) as? UITapGestureRecognizer }
+        set { objc_setAssociatedObject(self, &imageEmbedTapGestureKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+
+    fileprivate var imageEmbedTapDelegate: ImageEmbedTapDelegate? {
+        get { objc_getAssociatedObject(self, &imageEmbedTapDelegateKey) as? ImageEmbedTapDelegate }
+        set { objc_setAssociatedObject(self, &imageEmbedTapDelegateKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
 }
 
 /// Side-object delegate so we can filter the checkbox tap without
@@ -155,6 +225,28 @@ private final class CheckboxTapDelegate: NSObject, UIGestureRecognizerDelegate {
     }
 }
 
+private final class ImageEmbedTapDelegate: NSObject, UIGestureRecognizerDelegate {
+    weak var textView: MarkdownTextView?
+
+    init(textView: MarkdownTextView) {
+        self.textView = textView
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let textView else { return false }
+        return textView.tapLandsOnImageEmbed(at: gestureRecognizer.location(in: textView))
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
+}
+
 private nonisolated(unsafe) var checkboxTapGestureKey: UInt8 = 0
 private nonisolated(unsafe) var checkboxTapDelegateKey: UInt8 = 0
+private nonisolated(unsafe) var imageEmbedTapGestureKey: UInt8 = 0
+private nonisolated(unsafe) var imageEmbedTapDelegateKey: UInt8 = 0
 #endif

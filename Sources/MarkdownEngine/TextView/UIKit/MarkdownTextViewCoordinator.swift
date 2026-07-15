@@ -39,6 +39,7 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
 
     // Embedder callbacks
     var onLinkClick: ((String) -> Void)?
+    var onImageEmbedClick: ((EmbeddedImageRequest) -> Void)?
     var onCaretRectChange: ((CGRect) -> Void)?
     var onInlineSelectionChange: ((InlineSelectionState?) -> Void)?
     var onCodeBlockSelectionChange: (([CodeBlockSelection]) -> Void)?
@@ -54,6 +55,7 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         fontSize: CGFloat,
         isWikiLinkActive: Binding<Bool>,
         onLinkClick: ((String) -> Void)? = nil,
+        onImageEmbedClick: ((EmbeddedImageRequest) -> Void)? = nil,
         onInlineSelectionChange: ((InlineSelectionState?) -> Void)? = nil
     ) {
         self._text = text
@@ -61,6 +63,7 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         self.fontName = fontName
         self.fontSize = fontSize
         self.onLinkClick = onLinkClick
+        self.onImageEmbedClick = onImageEmbedClick
         self.onInlineSelectionChange = onInlineSelectionChange
     }
 

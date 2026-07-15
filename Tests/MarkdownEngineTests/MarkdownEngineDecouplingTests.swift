@@ -300,4 +300,70 @@ struct MarkdownEngineDecouplingTests {
         )
         #expect(!ranges.isEmpty)
     }
+
+    @Test func renderedImageEmbedCarriesItsActivationReference() throws {
+        let text = "![[Preview.png|11111111-2222-3333-4444-555555555555]]"
+        var configuration = MarkdownEditorConfiguration.default
+        configuration.services.images = TestEmbeddedImageProvider()
+        let ranges = MarkdownStyler.styleAttributes(
+            text: text,
+            fontName: PlatformFont.systemFont(ofSize: 14).fontName,
+            fontSize: 14,
+            caretLocation: text.utf16.count,
+            activeTokenIndices: [],
+            configuration: configuration
+        )
+        let activation = try #require(ranges.first { range in
+            range.attributes[.imageEmbedReference] != nil
+        })
+        #expect(
+            activation.attributes[.imageEmbedReference] as? String
+                == "Preview.png|11111111-2222-3333-4444-555555555555"
+        )
+    }
+
+    @Test func renderedBlockLatexDoesNotCarryAnImageActivationReference() {
+        let text = "$$x^2$$"
+        var configuration = MarkdownEditorConfiguration.default
+        configuration.services.latex = TestLatexRenderer()
+        let ranges = MarkdownStyler.styleAttributes(
+            text: text,
+            fontName: PlatformFont.systemFont(ofSize: 14).fontName,
+            fontSize: 14,
+            caretLocation: text.utf16.count,
+            activeTokenIndices: [],
+            configuration: configuration
+        )
+        #expect(ranges.allSatisfy { range in
+            range.attributes[.imageEmbedReference] == nil
+        })
+    }
+}
+
+private struct TestEmbeddedImageProvider: EmbeddedImageProvider {
+    func image(for _: EmbeddedImageRequest) -> PlatformImage? {
+        #if canImport(AppKit)
+        NSImage(size: NSSize(width: 16, height: 16))
+        #else
+        UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { _ in }
+        #endif
+    }
+
+    func fingerprint() -> AnyHashable { 1 }
+}
+
+private struct TestLatexRenderer: LatexRenderer {
+    func render(
+        latex _: String,
+        fontSize _: CGFloat,
+        theme _: MarkdownEditorTheme
+    ) -> LatexRenderResult? {
+        let size = CGSize(width: 16, height: 16)
+        #if canImport(AppKit)
+        let image = NSImage(size: size)
+        #else
+        let image = UIGraphicsImageRenderer(size: size).image { _ in }
+        #endif
+        return LatexRenderResult(image: image, size: size, baselineOffset: 0)
+    }
 }

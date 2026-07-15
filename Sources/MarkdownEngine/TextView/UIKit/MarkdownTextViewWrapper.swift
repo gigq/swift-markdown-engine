@@ -39,6 +39,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
     public var onTextEditRequestCompletion: ((UUID, MarkdownTextEditRequestResult) -> Void)?
 
     public var onLinkClick: ((String) -> Void)?
+    public var onImageEmbedClick: ((EmbeddedImageRequest) -> Void)?
     public var onCaretRectChange: ((CGRect) -> Void)?
     public var onInlineSelectionChange: ((InlineSelectionState?) -> Void)?
     public var onCodeBlockSelectionChange: (([CodeBlockSelection]) -> Void)?
@@ -60,6 +61,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         onInsertionAnchorChange: ((MarkdownTextInsertionAnchor) -> Void)? = nil,
         onTextEditRequestCompletion: ((UUID, MarkdownTextEditRequestResult) -> Void)? = nil,
         onLinkClick: ((String) -> Void)? = nil,
+        onImageEmbedClick: ((EmbeddedImageRequest) -> Void)? = nil,
         onCaretRectChange: ((CGRect) -> Void)? = nil,
         onInlineSelectionChange: ((InlineSelectionState?) -> Void)? = nil,
         onCodeBlockSelectionChange: (([CodeBlockSelection]) -> Void)? = nil
@@ -80,6 +82,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         self.onInsertionAnchorChange = onInsertionAnchorChange
         self.onTextEditRequestCompletion = onTextEditRequestCompletion
         self.onLinkClick = onLinkClick
+        self.onImageEmbedClick = onImageEmbedClick
         self.onCaretRectChange = onCaretRectChange
         self.onInlineSelectionChange = onInlineSelectionChange
         self.onCodeBlockSelectionChange = onCodeBlockSelectionChange
@@ -92,6 +95,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             fontSize: fontSize,
             isWikiLinkActive: $isWikiLinkActive,
             onLinkClick: onLinkClick,
+            onImageEmbedClick: onImageEmbedClick,
             onInlineSelectionChange: onInlineSelectionChange
         )
         coordinator.documentId = documentId
@@ -132,6 +136,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         textView.baseFont = baseFont
         textView.font = baseFont
         textView.installCheckboxTapHandler()
+        textView.installImageEmbedTapHandler()
         textView.applyDefaultTextBehaviors()
 
         // Order matters: `attributedText` must be set BEFORE we attach the
@@ -157,6 +162,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         context.coordinator.fontSize = fontSize
         context.coordinator.configuration = configuration
         context.coordinator.didInitialFormatting = true
+        textView.updateImageEmbedAccessibilityActions(onActivate: onImageEmbedClick)
         DispatchQueue.main.async {
             onInsertionAnchorChange?(context.coordinator.insertionAnchor(in: textView))
         }
@@ -181,6 +187,8 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         coordinator.onDropImages = onDropImages
         coordinator.onInsertionAnchorChange = onInsertionAnchorChange
         coordinator.onTextEditRequestCompletion = onTextEditRequestCompletion
+        coordinator.onImageEmbedClick = onImageEmbedClick
+        textView.updateImageEmbedAccessibilityActions(onActivate: onImageEmbedClick)
 
         let isDocumentSwitch = coordinator.documentId != documentId
         let fontChanged = coordinator.fontName != fontName || coordinator.fontSize != fontSize
@@ -188,6 +196,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         if let request = pendingInlineReplacement,
            request.documentId == documentId {
             applyInlineReplacement(request, to: textView, coordinator: coordinator)
+            textView.updateImageEmbedAccessibilityActions(onActivate: onImageEmbedClick)
             DispatchQueue.main.async {
                 if self.pendingInlineReplacement?.id == request.id {
                     self.pendingInlineReplacement = nil
@@ -241,6 +250,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         }
 
         coordinator.rebuildTextStorageAndStyle(textView, from: text)
+        textView.updateImageEmbedAccessibilityActions(onActivate: onImageEmbedClick)
         coordinator.didInitialFormatting = true
         if let textEditRequest {
             queueTextEditRequest(textEditRequest, textView: textView, coordinator: coordinator)
