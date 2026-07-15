@@ -20,6 +20,21 @@ import UIKit
 @Suite("Markdown engine decoupling")
 struct MarkdownEngineDecouplingTests {
 
+    @Test func findRequestsKeepTheirActionAndIdentity() {
+        let id = UUID()
+        let request = MarkdownFindRequest(
+            id: id,
+            documentID: "note-id",
+            action: .present(showingReplace: true)
+        )
+
+        #expect(request.id == id)
+        #expect(request.documentID == "note-id")
+        #expect(request.action == .present(showingReplace: true))
+        #expect(MarkdownFindRequest(documentID: "note-id", action: .nextMatch).action == .nextMatch)
+        #expect(MarkdownFindRequest(documentID: "note-id", action: .previousMatch).action == .previousMatch)
+    }
+
     // MARK: NoOp services stay inert
 
     @Test func noOpResolverReturnsNil() {

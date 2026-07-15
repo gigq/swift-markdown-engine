@@ -25,6 +25,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
     @Binding public var isWikiLinkActive: Bool
     @Binding public var pendingInlineReplacement: InlineReplacementRequest?
     @Binding public var pendingTextEditRequest: MarkdownTextEditRequest?
+    @Binding public var pendingFindRequest: MarkdownFindRequest?
 
     public var configuration: MarkdownEditorConfiguration
     public var fontName: String
@@ -47,6 +48,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         isWikiLinkActive: Binding<Bool> = .constant(false),
         pendingInlineReplacement: Binding<InlineReplacementRequest?> = .constant(nil),
         pendingTextEditRequest: Binding<MarkdownTextEditRequest?> = .constant(nil),
+        pendingFindRequest: Binding<MarkdownFindRequest?> = .constant(nil),
         configuration: MarkdownEditorConfiguration = .default,
         fontName: String = "SF Pro",
         fontSize: CGFloat = 16,
@@ -66,6 +68,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         self._isWikiLinkActive = isWikiLinkActive
         self._pendingInlineReplacement = pendingInlineReplacement
         self._pendingTextEditRequest = pendingTextEditRequest
+        self._pendingFindRequest = pendingFindRequest
         self.configuration = configuration
         self.fontName = fontName
         self.fontSize = fontSize
@@ -233,6 +236,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             if let textEditRequest {
                 queueTextEditRequest(textEditRequest, textView: textView, coordinator: coordinator)
             }
+            processFindRequest(on: textView, coordinator: coordinator)
             return
         }
 
@@ -241,6 +245,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         if let textEditRequest {
             queueTextEditRequest(textEditRequest, textView: textView, coordinator: coordinator)
         }
+        processFindRequest(on: textView, coordinator: coordinator)
     }
 
     private func queueTextEditRequest(
@@ -270,6 +275,40 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             coordinator.apply(request, to: textView)
             completeTextEditRequest(request, result: .applied, coordinator: coordinator)
             self.pendingTextEditRequest = nil
+        }
+    }
+
+    private func performFindRequest(_ request: MarkdownFindRequest, on textView: MarkdownTextView) {
+        switch request.action {
+        case let .present(showingReplace):
+            textView.findInteraction?.presentFindNavigator(showingReplace: showingReplace)
+        case .nextMatch:
+            textView.findInteraction?.findNext()
+        case .previousMatch:
+            textView.findInteraction?.findPrevious()
+        }
+    }
+
+    private func processFindRequest(
+        on textView: MarkdownTextView,
+        coordinator: MarkdownTextViewCoordinator
+    ) {
+        guard let request = pendingFindRequest,
+              coordinator.lastHandledFindRequestID != request.id else { return }
+        guard request.documentID == documentId else {
+            clearFindRequest(request)
+            return
+        }
+        coordinator.lastHandledFindRequestID = request.id
+        performFindRequest(request, on: textView)
+        clearFindRequest(request)
+    }
+
+    private func clearFindRequest(_ request: MarkdownFindRequest) {
+        DispatchQueue.main.async {
+            if self.pendingFindRequest?.id == request.id {
+                self.pendingFindRequest = nil
+            }
         }
     }
 

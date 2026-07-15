@@ -35,6 +35,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
     /// Push a replacement into the editor by setting this to a non-nil value;
     /// the engine applies it on the next update and then clears the binding.
     @Binding public var pendingInlineReplacement: InlineReplacementRequest?
+    @Binding public var pendingFindRequest: MarkdownFindRequest?
     /// The full editor configuration (theme + services + style toggles). Engine
     /// embedders construct this themselves and pass it in; the wrapper does
     /// not read UserDefaults or know about app-specific colors/services.
@@ -74,6 +75,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         text: Binding<String>,
         isWikiLinkActive: Binding<Bool> = .constant(false),
         pendingInlineReplacement: Binding<InlineReplacementRequest?> = .constant(nil),
+        pendingFindRequest: Binding<MarkdownFindRequest?> = .constant(nil),
         configuration: MarkdownEditorConfiguration = .default,
         fontName: String = "SF Pro",
         fontSize: CGFloat = 16,
@@ -88,6 +90,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         self._text = text
         self._isWikiLinkActive = isWikiLinkActive
         self._pendingInlineReplacement = pendingInlineReplacement
+        self._pendingFindRequest = pendingFindRequest
         self.configuration = configuration
         self.fontName = fontName
         self.fontSize = fontSize
@@ -155,6 +158,8 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         textView.font = font
         textView.baseFont = font
         textView.allowsUndo = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.isAutomaticSpellingCorrectionEnabled = true
         textView.isContinuousSpellCheckingEnabled = true
         textView.isGrammarCheckingEnabled = true
@@ -233,6 +238,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
             context.coordinator.isWritingToolsActive = false
         } else if wtActive {
             // WT active on the same node — don't interfere with the session.
+            processFindRequest(on: textView, coordinator: context.coordinator)
             return
         }
 
@@ -282,7 +288,9 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         }
         if context.coordinator.didInitialFormatting
             && context.coordinator.lastSyncedText == text
-            && !fontChanged {
+            && !fontChanged
+            && !isNodeSwitch {
+            processFindRequest(on: textView, coordinator: context.coordinator)
             return
         }
         if fontChanged {
@@ -332,6 +340,7 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         context.coordinator.onInlineSelectionChange = onInlineSelectionChange
         context.coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
         context.coordinator.didInitialFormatting = true
+        processFindRequest(on: textView, coordinator: context.coordinator)
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -347,6 +356,44 @@ public struct NativeTextViewWrapper: NSViewRepresentable {
         coordinator.configuration = configuration
         coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
         return coordinator
+    }
+
+    private func performFindRequest(_ request: MarkdownFindRequest, on textView: NSTextView) {
+        textView.window?.makeFirstResponder(textView)
+        let finderAction: NSTextFinder.Action = switch request.action {
+        case let .present(showingReplace):
+            showingReplace ? .showReplaceInterface : .showFindInterface
+        case .nextMatch:
+            .nextMatch
+        case .previousMatch:
+            .previousMatch
+        }
+        let sender = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        sender.tag = finderAction.rawValue
+        textView.performTextFinderAction(sender)
+    }
+
+    private func processFindRequest(
+        on textView: NSTextView,
+        coordinator: NativeTextViewCoordinator
+    ) {
+        guard let request = pendingFindRequest,
+              coordinator.lastHandledFindRequestID != request.id else { return }
+        guard request.documentID == documentId else {
+            clearFindRequest(request)
+            return
+        }
+        coordinator.lastHandledFindRequestID = request.id
+        performFindRequest(request, on: textView)
+        clearFindRequest(request)
+    }
+
+    private func clearFindRequest(_ request: MarkdownFindRequest) {
+        DispatchQueue.main.async {
+            if self.pendingFindRequest?.id == request.id {
+                self.pendingFindRequest = nil
+            }
+        }
     }
 }
 

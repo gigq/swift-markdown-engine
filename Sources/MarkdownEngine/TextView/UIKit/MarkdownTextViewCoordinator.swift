@@ -35,6 +35,7 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
     var queuedTextEditRequestID: UUID?
     var cancelledTextEditRequestID: UUID?
     var completedTextEditRequestID: UUID?
+    var lastHandledFindRequestID: UUID?
 
     // Embedder callbacks
     var onLinkClick: ((String) -> Void)?
@@ -87,15 +88,16 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         )
 
         let selectedRange = textView.selectedRange
+        // Restyle the live storage in place. Assigning `attributedText` swaps
+        // UITextView's TextKit stack, which invalidates an active native-find
+        // session and the undo transaction created by Replace / Replace All.
         textView.isPerformingProgrammaticEdit = true
-        textView.attributedText = attributed
+        textView.textStorage.setAttributedString(attributed)
         textView.isPerformingProgrammaticEdit = false
 
-        // Re-attach the layout-manager delegate so the custom fragment
-        // subclass renders the still-not-migrated line-spanning chrome
+        // Keep the custom fragment delegate attached for line-spanning chrome
         // (blockquote rail, horizontal rule, code-block fill, table header
-        // rule). Setting `attributedText` swaps the live `textLayoutManager`
-        // and the new manager comes up with a nil delegate.
+        // rule). The in-place storage update preserves the layout manager.
         if let delegate = layoutDelegate {
             textView.markdownLayoutDelegate = delegate
         }
