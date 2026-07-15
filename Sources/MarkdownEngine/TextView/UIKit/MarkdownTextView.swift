@@ -64,6 +64,39 @@ final class MarkdownTextView: UITextView {
     /// system's default paste behavior.
     var onPasteImage: ((UIPasteboard) -> String?)?
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        keepSelectionVisibleAboveInputAccessory()
+    }
+
+    private func keepSelectionVisibleAboveInputAccessory() {
+        let obscuredHeight = bounds.intersection(keyboardLayoutGuide.layoutFrame).height
+        if abs(contentInset.bottom - obscuredHeight) > 0.5 {
+            contentInset.bottom = obscuredHeight
+            verticalScrollIndicatorInsets.bottom = obscuredHeight
+        }
+
+        guard isFirstResponder,
+              obscuredHeight > 0,
+              let selection = selectedTextRange else {
+            return
+        }
+
+        let caret = caretRect(for: selection.end)
+        let visibleBottom = bounds.maxY - obscuredHeight
+        let overlap = caret.maxY - visibleBottom
+        guard overlap > 0.5 else { return }
+
+        let minimumOffset = -adjustedContentInset.top
+        let maximumOffset = max(
+            minimumOffset,
+            contentSize.height + adjustedContentInset.bottom - bounds.height
+        )
+        let newOffset = min(maximumOffset, max(minimumOffset, contentOffset.y + overlap))
+        guard abs(newOffset - contentOffset.y) > 0.5 else { return }
+        contentOffset.y = newOffset
+    }
+
     // The full `MarkdownEditorConfiguration` lives on the coordinator and the
     // layout-manager delegate's `MarkdownRenderContext`. Holding a copy here
     // tripped a Swift-runtime EXC_BAD_ACCESS during `outlined assign with

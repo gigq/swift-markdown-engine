@@ -73,6 +73,109 @@ struct MarkdownEngineDecouplingTests {
         #expect(kinds.contains(.inlineCode))
     }
 
+    // MARK: Selection-aware host edit requests
+
+    @Test func editRequestWrapsSelectionAndKeepsTheCoreSelected() {
+        let result = MarkdownTextEditResolver.resolve(
+            .wrapSelection(prefix: "**", suffix: "**"),
+            in: "Before  words  after",
+            selectedRange: NSRange(location: 6, length: 9)
+        )
+
+        #expect(result.replacement == "  **words**  ")
+        #expect(result.selectedRange == NSRange(location: 10, length: 5))
+    }
+
+    @Test func editRequestInsertsPairedMarkersAtTheCaret() {
+        let result = MarkdownTextEditResolver.resolve(
+            .wrapSelection(prefix: "*", suffix: "*"),
+            in: "Text",
+            selectedRange: NSRange(location: 2, length: 0)
+        )
+
+        #expect(result.replacement == "**")
+        #expect(result.selectedRange == NSRange(location: 3, length: 0))
+    }
+
+    @Test func editRequestReplacesATemplatePlaceholderWithTheSelection() {
+        let result = MarkdownTextEditResolver.resolve(
+            .insertTemplate(template: "[Link](https://example.com)", placeholder: "Link"),
+            in: "Open Typed now",
+            selectedRange: NSRange(location: 5, length: 5)
+        )
+
+        #expect(result.replacement == "[Typed](https://example.com)")
+        #expect(result.selectedRange == NSRange(location: 6, length: 5))
+    }
+
+    @Test func editRequestAppliesAndRemovesChecklistLineTemplate() {
+        let applied = MarkdownTextEditResolver.resolve(
+            .applyLineTemplate(template: "- [ ] Todo", placeholder: "Todo"),
+            in: "Buy milk",
+            selectedRange: NSRange(location: 8, length: 0)
+        )
+        #expect(applied.replacement == "- [ ] Buy milk")
+        #expect(applied.selectedRange == NSRange(location: 14, length: 0))
+
+        let removed = MarkdownTextEditResolver.resolve(
+            .applyLineTemplate(template: "- [ ] Todo", placeholder: "Todo"),
+            in: applied.replacement,
+            selectedRange: applied.selectedRange
+        )
+        #expect(removed.replacement == "Buy milk")
+        #expect(removed.selectedRange == NSRange(location: 8, length: 0))
+    }
+
+    @Test func editRequestConvertsBetweenBulletAndChecklistKinds() {
+        let bulletFromChecklist = MarkdownTextEditResolver.resolve(
+            .applyLineTemplate(template: "- List item", placeholder: "List item"),
+            in: "- [ ] Todo",
+            selectedRange: NSRange(location: 10, length: 0)
+        )
+        #expect(bulletFromChecklist.replacement == "- Todo")
+
+        let checklistFromBullet = MarkdownTextEditResolver.resolve(
+            .applyLineTemplate(template: "- [ ] Todo", placeholder: "Todo"),
+            in: "* Item",
+            selectedRange: NSRange(location: 6, length: 0)
+        )
+        #expect(checklistFromBullet.replacement == "- [ ] Item")
+    }
+
+    @Test func editRequestRemovesEquivalentAlternateAndCheckedPrefixes() {
+        let alternateBullet = MarkdownTextEditResolver.resolve(
+            .applyLineTemplate(template: "- List item", placeholder: "List item"),
+            in: "+ Item",
+            selectedRange: NSRange(location: 6, length: 0)
+        )
+        #expect(alternateBullet.replacement == "Item")
+
+        let checkedItem = MarkdownTextEditResolver.resolve(
+            .applyLineTemplate(template: "- [ ] Todo", placeholder: "Todo"),
+            in: "- [x] Done",
+            selectedRange: NSRange(location: 10, length: 0)
+        )
+        #expect(checkedItem.replacement == "Done")
+    }
+
+    @Test func editRequestCyclesHeadingThroughBodyText() {
+        let headingTwo = MarkdownTextEditResolver.resolve(
+            .cycleHeading(maxLevel: 3),
+            in: "# Heading",
+            selectedRange: NSRange(location: 9, length: 0)
+        )
+        #expect(headingTwo.replacement == "## Heading")
+        #expect(headingTwo.selectedRange == NSRange(location: 10, length: 0))
+
+        let body = MarkdownTextEditResolver.resolve(
+            .cycleHeading(maxLevel: 3),
+            in: "### Heading",
+            selectedRange: NSRange(location: 11, length: 0)
+        )
+        #expect(body.replacement == "Heading")
+        #expect(body.selectedRange == NSRange(location: 7, length: 0))
+    }
+
     // MARK: Default services container is fully wired with no-ops
 
     @Test func defaultServicesAreAllNoOps() {

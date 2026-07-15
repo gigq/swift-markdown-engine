@@ -24,12 +24,14 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
     @Binding public var text: String
     @Binding public var isWikiLinkActive: Bool
     @Binding public var pendingInlineReplacement: InlineReplacementRequest?
+    @Binding public var pendingTextEditRequest: MarkdownTextEditRequest?
 
     public var configuration: MarkdownEditorConfiguration
     public var fontName: String
     public var fontSize: CGFloat
     public var documentId: String
     public var isEditable: Bool
+    public var inputAccessoryContent: (() -> AnyView)?
     public var onPasteImage: ((UIPasteboard) -> String?)?
 
     public var onLinkClick: ((String) -> Void)?
@@ -41,11 +43,13 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         text: Binding<String>,
         isWikiLinkActive: Binding<Bool> = .constant(false),
         pendingInlineReplacement: Binding<InlineReplacementRequest?> = .constant(nil),
+        pendingTextEditRequest: Binding<MarkdownTextEditRequest?> = .constant(nil),
         configuration: MarkdownEditorConfiguration = .default,
         fontName: String = "SF Pro",
         fontSize: CGFloat = 16,
         documentId: String = "default",
         isEditable: Bool = true,
+        inputAccessoryContent: (() -> AnyView)? = nil,
         onPasteImage: ((UIPasteboard) -> String?)? = nil,
         onLinkClick: ((String) -> Void)? = nil,
         onCaretRectChange: ((CGRect) -> Void)? = nil,
@@ -55,11 +59,13 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         self._text = text
         self._isWikiLinkActive = isWikiLinkActive
         self._pendingInlineReplacement = pendingInlineReplacement
+        self._pendingTextEditRequest = pendingTextEditRequest
         self.configuration = configuration
         self.fontName = fontName
         self.fontSize = fontSize
         self.documentId = documentId
         self.isEditable = isEditable
+        self.inputAccessoryContent = inputAccessoryContent
         self.onPasteImage = onPasteImage
         self.onLinkClick = onLinkClick
         self.onCaretRectChange = onCaretRectChange
@@ -102,6 +108,9 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             .foregroundColor: configuration.theme.link
         ]
         textView.onPasteImage = onPasteImage
+        #if os(iOS)
+        updateInputAccessory(on: textView)
+        #endif
 
         let baseFont = PlatformFontMaker.make(name: fontName, size: fontSize)
         textView.baseFont = baseFont
@@ -141,6 +150,9 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
 
         textView.isEditable = isEditable
         textView.onPasteImage = onPasteImage
+        #if os(iOS)
+        updateInputAccessory(on: textView)
+        #endif
         coordinator.configuration = configuration
         coordinator.onCaretRectChange = onCaretRectChange
         coordinator.onInlineSelectionChange = onInlineSelectionChange
@@ -163,6 +175,8 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         if isDocumentSwitch {
             coordinator.documentId = documentId
             coordinator.didInitialFormatting = false
+            coordinator.documentGeneration += 1
+            coordinator.queuedTextEditRequestID = nil
         }
 
         if fontChanged {
@@ -177,13 +191,84 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             coordinator.layoutDelegate?.renderContext?.configuration = configuration
         }
 
+        let textEditRequest: MarkdownTextEditRequest?
+        if let request = pendingTextEditRequest, request.documentID != documentId {
+            coordinator.cancelledTextEditRequestID = request.id
+            clearTextEditRequest(request)
+            textEditRequest = nil
+        } else if let request = pendingTextEditRequest,
+                  coordinator.cancelledTextEditRequestID == request.id {
+            clearTextEditRequest(request)
+            textEditRequest = nil
+        } else {
+            textEditRequest = pendingTextEditRequest
+        }
+
         if coordinator.didInitialFormatting && coordinator.lastSyncedText == text && !fontChanged && !isDocumentSwitch {
+            if let textEditRequest {
+                queueTextEditRequest(textEditRequest, textView: textView, coordinator: coordinator)
+            }
             return
         }
 
         coordinator.rebuildTextStorageAndStyle(textView, from: text)
         coordinator.didInitialFormatting = true
+        if let textEditRequest {
+            queueTextEditRequest(textEditRequest, textView: textView, coordinator: coordinator)
+        }
     }
+
+    private func queueTextEditRequest(
+        _ request: MarkdownTextEditRequest,
+        textView: MarkdownTextView,
+        coordinator: MarkdownTextViewCoordinator
+    ) {
+        guard coordinator.cancelledTextEditRequestID != request.id else { return }
+        guard coordinator.queuedTextEditRequestID != request.id else { return }
+        let documentGeneration = coordinator.documentGeneration
+        coordinator.queuedTextEditRequestID = request.id
+        DispatchQueue.main.async {
+            defer {
+                if coordinator.queuedTextEditRequestID == request.id {
+                    coordinator.queuedTextEditRequestID = nil
+                }
+            }
+            guard coordinator.documentGeneration == documentGeneration,
+                  coordinator.cancelledTextEditRequestID != request.id,
+                  coordinator.documentId == request.documentID,
+                  self.pendingTextEditRequest?.id == request.id else {
+                return
+            }
+            coordinator.apply(request, to: textView)
+            self.pendingTextEditRequest = nil
+        }
+    }
+
+    private func clearTextEditRequest(_ request: MarkdownTextEditRequest) {
+        DispatchQueue.main.async {
+            if self.pendingTextEditRequest?.id == request.id {
+                self.pendingTextEditRequest = nil
+            }
+        }
+    }
+
+    #if os(iOS)
+    private func updateInputAccessory(on textView: MarkdownTextView) {
+        guard let inputAccessoryContent else {
+            textView.inputAccessoryView = nil
+            return
+        }
+
+        let rootView = inputAccessoryContent()
+        if let accessory = textView.inputAccessoryView as? MarkdownInputAccessoryHostingView {
+            accessory.update(rootView: rootView)
+        } else {
+            textView.inputAccessoryView = MarkdownInputAccessoryHostingView(
+                rootView: rootView
+            )
+        }
+    }
+    #endif
 
     private func applyInlineReplacement(
         _ request: InlineReplacementRequest,
@@ -231,4 +316,68 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         textView.markdownLayoutDelegate = delegate
     }
 }
+
+#if os(iOS)
+@MainActor
+private final class MarkdownInputAccessoryHostingView: UIInputView {
+    private let hostingController: UIHostingController<AnyView>
+    private var accessoryHeight: CGFloat = 44
+
+    init(rootView: AnyView) {
+        hostingController = UIHostingController(rootView: rootView)
+        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44), inputViewStyle: .keyboard)
+        allowsSelfSizing = true
+        autoresizingMask = [.flexibleWidth]
+
+        guard let hostedView = hostingController.view else { return }
+        hostedView.backgroundColor = .clear
+        hostedView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hostedView)
+        NSLayoutConstraint.activate([
+            hostedView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hostedView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hostedView.topAnchor.constraint(equalTo: topAnchor),
+            hostedView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardFrameDidChange(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil
+        )
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: accessoryHeight)
+    }
+
+    func update(rootView: AnyView) {
+        hostingController.rootView = rootView
+    }
+
+    @objc private func keyboardFrameDidChange(_ notification: Notification) {
+        guard let window,
+              let screenFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+        let keyboardFrame = window.convert(screenFrame, from: nil)
+        let keyboardOverlap = max(0, window.bounds.maxY - keyboardFrame.minY)
+        let newHeight: CGFloat = keyboardOverlap > 100 ? 44 : 0
+        if newHeight != accessoryHeight {
+            accessoryHeight = newHeight
+            invalidateIntrinsicContentSize()
+        }
+    }
+}
+#endif
 #endif

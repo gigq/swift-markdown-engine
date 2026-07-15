@@ -31,6 +31,9 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
 
     var lastSyncedText: String = ""
     var didInitialFormatting: Bool = false
+    var documentGeneration = 0
+    var queuedTextEditRequestID: UUID?
+    var cancelledTextEditRequestID: UUID?
 
     // Embedder callbacks
     var onLinkClick: ((String) -> Void)?
@@ -148,7 +151,7 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
     /// get the attachment's `originalChar` back, and `•` bullet glyphs
     /// carrying `.listBulletOriginal` get their source `-`/`*`/`+` back.
     /// Returns the resulting string in source form ready for the binding.
-    private func restoreAnchorSubstitutions(in storage: NSTextStorage) -> String {
+    func restoreAnchorSubstitutions(in storage: NSTextStorage) -> String {
         let mutable = NSMutableString(string: storage.string)
         var replacements: [(NSRange, String)] = []
         storage.enumerateAttribute(
