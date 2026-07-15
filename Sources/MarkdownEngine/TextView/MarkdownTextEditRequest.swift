@@ -16,6 +16,26 @@ public enum MarkdownTextEdit: Equatable, Sendable {
     case indent
     case outdent
     case insertTemplate(template: String, placeholder: String?)
+    case insertTemplateAtAnchor(
+        template: String,
+        anchor: MarkdownTextInsertionAnchor,
+        replacesSelection: Bool
+    )
+}
+
+public struct MarkdownTextInsertionAnchor: Equatable, Sendable {
+    public let sourceText: String
+    public let selectedRange: NSRange
+
+    public init(sourceText: String, selectedRange: NSRange) {
+        self.sourceText = sourceText
+        self.selectedRange = selectedRange
+    }
+}
+
+public enum MarkdownTextEditRequestResult: Equatable, Sendable {
+    case applied
+    case discardedDocumentMismatch
 }
 
 public struct MarkdownTextEditRequest: Identifiable, Equatable, Sendable {
@@ -75,7 +95,68 @@ enum MarkdownTextEditResolver {
             }
         case let .insertTemplate(template, placeholder):
             return insertTemplate(template, placeholder: placeholder, in: text, range: selection)
+        case let .insertTemplateAtAnchor(template, anchor, replacesSelection):
+            let insertionRange = translated(anchor: anchor, to: text)
+            if replacesSelection, insertionRange.length > 0 {
+                return MarkdownTextEditResolution(
+                    replacementRange: insertionRange,
+                    replacement: template,
+                    selectedRange: NSRange(
+                        location: insertionRange.location + template.utf16.count,
+                        length: 0
+                    )
+                )
+            }
+            return insertTemplate(template, placeholder: nil, in: text, range: insertionRange)
         }
+    }
+
+    private static func translated(anchor: MarkdownTextInsertionAnchor, to text: String) -> NSRange {
+        let source = Array(anchor.sourceText.utf16)
+        let destination = Array(text.utf16)
+        let sourceRange = clamped(anchor.selectedRange, in: anchor.sourceText)
+        let difference = destination.difference(from: source)
+        let removedOffsets = Set(difference.compactMap { change -> Int? in
+            guard case let .remove(offset, _, _) = change else { return nil }
+            return offset
+        })
+        let insertedOffsets = Set(difference.compactMap { change -> Int? in
+            guard case let .insert(offset, _, _) = change else { return nil }
+            return offset
+        })
+
+        func translatedBoundary(_ sourceOffset: Int) -> Int {
+            var oldOffset = 0
+            var newOffset = 0
+            while oldOffset < sourceOffset {
+                while insertedOffsets.contains(newOffset) {
+                    newOffset += 1
+                }
+                if removedOffsets.contains(oldOffset) {
+                    oldOffset += 1
+                } else {
+                    oldOffset += 1
+                    newOffset += 1
+                }
+            }
+            while insertedOffsets.contains(newOffset) {
+                newOffset += 1
+            }
+            return validUTF16Boundary(min(newOffset, destination.count), in: destination)
+        }
+
+        let start = translatedBoundary(sourceRange.location)
+        let end = max(start, translatedBoundary(NSMaxRange(sourceRange)))
+        return NSRange(location: start, length: end - start)
+    }
+
+    private static func validUTF16Boundary(_ offset: Int, in codeUnits: [UInt16]) -> Int {
+        guard offset > 0, offset < codeUnits.count else { return offset }
+        let previous = codeUnits[offset - 1]
+        let next = codeUnits[offset]
+        let splitsSurrogatePair = (0xD800 ... 0xDBFF).contains(previous)
+            && (0xDC00 ... 0xDFFF).contains(next)
+        return splitsSurrogatePair ? offset + 1 : offset
     }
 
     private struct LineEdit {

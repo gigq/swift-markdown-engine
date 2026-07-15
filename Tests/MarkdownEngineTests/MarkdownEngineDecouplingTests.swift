@@ -108,6 +108,80 @@ struct MarkdownEngineDecouplingTests {
         #expect(result.selectedRange == NSRange(location: 6, length: 5))
     }
 
+    @Test func editRequestInsertsAtCapturedRevisionAnchor() {
+        let result = MarkdownTextEditResolver.resolve(
+            .insertTemplateAtAnchor(
+                template: "![[Photo.png|resource-id]]",
+                anchor: MarkdownTextInsertionAnchor(
+                    sourceText: "Before after",
+                    selectedRange: NSRange(location: 7, length: 0)
+                ),
+                replacesSelection: false
+            ),
+            in: "Before after",
+            selectedRange: NSRange(location: 12, length: 0)
+        )
+
+        #expect(result.replacementRange == NSRange(location: 7, length: 0))
+        #expect(result.replacement == "![[Photo.png|resource-id]]")
+        #expect(result.selectedRange == NSRange(location: 33, length: 0))
+    }
+
+    @Test func editRequestTranslatesAnchorPastInterveningInsertion() {
+        let result = MarkdownTextEditResolver.resolve(
+            .insertTemplateAtAnchor(
+                template: "image",
+                anchor: MarkdownTextInsertionAnchor(
+                    sourceText: "Before after",
+                    selectedRange: NSRange(location: 7, length: 0)
+                ),
+                replacesSelection: false
+            ),
+            in: "New Before after",
+            selectedRange: NSRange(location: 0, length: 0)
+        )
+
+        #expect(result.replacementRange == NSRange(location: 11, length: 0))
+        #expect(result.selectedRange == NSRange(location: 16, length: 0))
+    }
+
+    @Test func editRequestMovesInvalidAnchorPastEmojiSurrogatePair() {
+        let result = MarkdownTextEditResolver.resolve(
+            .insertTemplateAtAnchor(
+                template: "image",
+                anchor: MarkdownTextInsertionAnchor(
+                    sourceText: "A😀B",
+                    selectedRange: NSRange(location: 2, length: 0)
+                ),
+                replacesSelection: false
+            ),
+            in: "A😀B",
+            selectedRange: NSRange(location: 0, length: 0)
+        )
+
+        #expect(result.replacementRange == NSRange(location: 3, length: 0))
+        #expect(result.selectedRange == NSRange(location: 8, length: 0))
+    }
+
+    @Test func anchoredPasteReplacesCapturedSelection() {
+        let result = MarkdownTextEditResolver.resolve(
+            .insertTemplateAtAnchor(
+                template: "image",
+                anchor: MarkdownTextInsertionAnchor(
+                    sourceText: "Before selected after",
+                    selectedRange: NSRange(location: 7, length: 8)
+                ),
+                replacesSelection: true
+            ),
+            in: "Before selected after",
+            selectedRange: NSRange(location: 0, length: 0)
+        )
+
+        #expect(result.replacementRange == NSRange(location: 7, length: 8))
+        #expect(result.replacement == "image")
+        #expect(result.selectedRange == NSRange(location: 12, length: 0))
+    }
+
     @Test func editRequestAppliesAndRemovesChecklistLineTemplate() {
         let applied = MarkdownTextEditResolver.resolve(
             .applyLineTemplate(template: "- [ ] Todo", placeholder: "Todo"),

@@ -59,10 +59,9 @@ final class MarkdownTextView: UITextView {
     /// during programmatic edits (e.g. tap-to-toggle checkboxes).
     var isPerformingProgrammaticEdit: Bool = false
 
-    /// Callback the editor invokes when the user pastes an image. Return the
-    /// markdown snippet to insert at the caret, or nil to fall through to the
-    /// system's default paste behavior.
-    var onPasteImage: ((UIPasteboard) -> String?)?
+    /// Callback the editor invokes when the user pastes an image. The host
+    /// imports the payload before sending an anchored edit request back.
+    var onPasteImage: ((UIPasteboard, MarkdownTextInsertionAnchor) -> Void)?
 
     override func layoutSubviews() {
         super.layoutSubviews()

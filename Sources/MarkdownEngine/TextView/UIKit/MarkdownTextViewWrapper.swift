@@ -32,7 +32,10 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
     public var documentId: String
     public var isEditable: Bool
     public var inputAccessoryContent: (() -> AnyView)?
-    public var onPasteImage: ((UIPasteboard) -> String?)?
+    public var onPasteImage: ((UIPasteboard, MarkdownTextInsertionAnchor) -> Void)?
+    public var onDropImages: (([NSItemProvider], MarkdownTextInsertionAnchor) -> Void)?
+    public var onInsertionAnchorChange: ((MarkdownTextInsertionAnchor) -> Void)?
+    public var onTextEditRequestCompletion: ((UUID, MarkdownTextEditRequestResult) -> Void)?
 
     public var onLinkClick: ((String) -> Void)?
     public var onCaretRectChange: ((CGRect) -> Void)?
@@ -50,7 +53,10 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         documentId: String = "default",
         isEditable: Bool = true,
         inputAccessoryContent: (() -> AnyView)? = nil,
-        onPasteImage: ((UIPasteboard) -> String?)? = nil,
+        onPasteImage: ((UIPasteboard, MarkdownTextInsertionAnchor) -> Void)? = nil,
+        onDropImages: (([NSItemProvider], MarkdownTextInsertionAnchor) -> Void)? = nil,
+        onInsertionAnchorChange: ((MarkdownTextInsertionAnchor) -> Void)? = nil,
+        onTextEditRequestCompletion: ((UUID, MarkdownTextEditRequestResult) -> Void)? = nil,
         onLinkClick: ((String) -> Void)? = nil,
         onCaretRectChange: ((CGRect) -> Void)? = nil,
         onInlineSelectionChange: ((InlineSelectionState?) -> Void)? = nil,
@@ -67,6 +73,9 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         self.isEditable = isEditable
         self.inputAccessoryContent = inputAccessoryContent
         self.onPasteImage = onPasteImage
+        self.onDropImages = onDropImages
+        self.onInsertionAnchorChange = onInsertionAnchorChange
+        self.onTextEditRequestCompletion = onTextEditRequestCompletion
         self.onLinkClick = onLinkClick
         self.onCaretRectChange = onCaretRectChange
         self.onInlineSelectionChange = onInlineSelectionChange
@@ -86,6 +95,9 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         coordinator.configuration = configuration
         coordinator.onCaretRectChange = onCaretRectChange
         coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
+        coordinator.onDropImages = onDropImages
+        coordinator.onInsertionAnchorChange = onInsertionAnchorChange
+        coordinator.onTextEditRequestCompletion = onTextEditRequestCompletion
         return coordinator
     }
 
@@ -109,6 +121,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         ]
         textView.onPasteImage = onPasteImage
         #if os(iOS)
+        textView.textDropDelegate = context.coordinator
         updateInputAccessory(on: textView)
         #endif
 
@@ -141,6 +154,9 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         context.coordinator.fontSize = fontSize
         context.coordinator.configuration = configuration
         context.coordinator.didInitialFormatting = true
+        DispatchQueue.main.async {
+            onInsertionAnchorChange?(context.coordinator.insertionAnchor(in: textView))
+        }
         return textView
     }
 
@@ -153,10 +169,15 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         #if os(iOS)
         updateInputAccessory(on: textView)
         #endif
+        let imageServicesChanged = coordinator.configuration.services.images.fingerprint()
+            != configuration.services.images.fingerprint()
         coordinator.configuration = configuration
         coordinator.onCaretRectChange = onCaretRectChange
         coordinator.onInlineSelectionChange = onInlineSelectionChange
         coordinator.onCodeBlockSelectionChange = onCodeBlockSelectionChange
+        coordinator.onDropImages = onDropImages
+        coordinator.onInsertionAnchorChange = onInsertionAnchorChange
+        coordinator.onTextEditRequestCompletion = onTextEditRequestCompletion
 
         let isDocumentSwitch = coordinator.documentId != documentId
         let fontChanged = coordinator.fontName != fontName || coordinator.fontSize != fontSize
@@ -194,7 +215,7 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
         let textEditRequest: MarkdownTextEditRequest?
         if let request = pendingTextEditRequest, request.documentID != documentId {
             coordinator.cancelledTextEditRequestID = request.id
-            clearTextEditRequest(request)
+            discardTextEditRequest(request, coordinator: coordinator)
             textEditRequest = nil
         } else if let request = pendingTextEditRequest,
                   coordinator.cancelledTextEditRequestID == request.id {
@@ -204,7 +225,11 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             textEditRequest = pendingTextEditRequest
         }
 
-        if coordinator.didInitialFormatting && coordinator.lastSyncedText == text && !fontChanged && !isDocumentSwitch {
+        if coordinator.didInitialFormatting,
+           coordinator.lastSyncedText == text,
+           !fontChanged,
+           !isDocumentSwitch,
+           !imageServicesChanged {
             if let textEditRequest {
                 queueTextEditRequest(textEditRequest, textView: textView, coordinator: coordinator)
             }
@@ -237,11 +262,25 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
                   coordinator.cancelledTextEditRequestID != request.id,
                   coordinator.documentId == request.documentID,
                   self.pendingTextEditRequest?.id == request.id else {
+                if coordinator.documentId != request.documentID {
+                    discardTextEditRequest(request, coordinator: coordinator)
+                }
                 return
             }
             coordinator.apply(request, to: textView)
+            completeTextEditRequest(request, result: .applied, coordinator: coordinator)
             self.pendingTextEditRequest = nil
         }
+    }
+
+    private func completeTextEditRequest(
+        _ request: MarkdownTextEditRequest,
+        result: MarkdownTextEditRequestResult,
+        coordinator: MarkdownTextViewCoordinator
+    ) {
+        guard coordinator.completedTextEditRequestID != request.id else { return }
+        coordinator.completedTextEditRequestID = request.id
+        coordinator.onTextEditRequestCompletion?(request.id, result)
     }
 
     private func clearTextEditRequest(_ request: MarkdownTextEditRequest) {
@@ -249,6 +288,22 @@ public struct MarkdownTextViewWrapper: UIViewRepresentable {
             if self.pendingTextEditRequest?.id == request.id {
                 self.pendingTextEditRequest = nil
             }
+        }
+    }
+
+    private func discardTextEditRequest(
+        _ request: MarkdownTextEditRequest,
+        coordinator: MarkdownTextViewCoordinator
+    ) {
+        DispatchQueue.main.async {
+            if self.pendingTextEditRequest?.id == request.id {
+                self.pendingTextEditRequest = nil
+            }
+            completeTextEditRequest(
+                request,
+                result: .discardedDocumentMismatch,
+                coordinator: coordinator
+            )
         }
     }
 

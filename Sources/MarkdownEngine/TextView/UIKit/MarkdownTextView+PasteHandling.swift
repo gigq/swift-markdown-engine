@@ -17,8 +17,10 @@ extension MarkdownTextView {
         let hasImage = pasteboard.image != nil
             || pasteboard.hasImages
             || (pasteboard.images?.isEmpty == false)
-        if hasImage, let snippet = onPasteImage?(pasteboard), !snippet.isEmpty {
-            insertPastedSnippet(snippet)
+        if hasImage,
+           let coordinator = delegate as? MarkdownTextViewCoordinator,
+           let onPasteImage {
+            onPasteImage(pasteboard, coordinator.insertionAnchor(in: self))
             return
         }
         super.paste(sender)
@@ -33,24 +35,6 @@ extension MarkdownTextView {
             }
         }
         return super.canPerformAction(action, withSender: sender)
-    }
-
-    private func insertPastedSnippet(_ snippet: String) {
-        guard isEditable else { return }
-        isPerformingProgrammaticEdit = true
-        let storage = textStorage
-        let selRange = selectedRange
-        let safeLoc = min(selRange.location, storage.length)
-        let safeLen = min(selRange.length, storage.length - safeLoc)
-        let safeRange = NSRange(location: safeLoc, length: safeLen)
-        storage.replaceCharacters(in: safeRange, with: snippet)
-        let caret = safeLoc + (snippet as NSString).length
-        selectedRange = NSRange(location: min(caret, storage.length), length: 0)
-        isPerformingProgrammaticEdit = false
-
-        if let coord = delegate as? MarkdownTextViewCoordinator {
-            coord.textViewDidChange(self)
-        }
     }
 }
 #endif

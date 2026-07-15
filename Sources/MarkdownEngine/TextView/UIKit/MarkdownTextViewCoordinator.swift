@@ -34,12 +34,16 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
     var documentGeneration = 0
     var queuedTextEditRequestID: UUID?
     var cancelledTextEditRequestID: UUID?
+    var completedTextEditRequestID: UUID?
 
     // Embedder callbacks
     var onLinkClick: ((String) -> Void)?
     var onCaretRectChange: ((CGRect) -> Void)?
     var onInlineSelectionChange: ((InlineSelectionState?) -> Void)?
     var onCodeBlockSelectionChange: (([CodeBlockSelection]) -> Void)?
+    var onDropImages: (([NSItemProvider], MarkdownTextInsertionAnchor) -> Void)?
+    var onInsertionAnchorChange: ((MarkdownTextInsertionAnchor) -> Void)?
+    var onTextEditRequestCompletion: ((UUID, MarkdownTextEditRequestResult) -> Void)?
 
     weak var textView: MarkdownTextView?
 
@@ -140,10 +144,23 @@ public final class MarkdownTextViewCoordinator: NSObject, UITextViewDelegate {
         // code-block overlays in sync with the latest text + caret.
         updateInlineSelectionCallbacks(in: textView)
         updateCodeBlockSelection(textView: textView)
+        onInsertionAnchorChange?(insertionAnchor(in: mdTextView))
     }
 
     public func textViewDidChangeSelection(_ textView: UITextView) {
         updateInlineSelectionCallbacks(in: textView)
+        guard let textView = textView as? MarkdownTextView else { return }
+        onInsertionAnchorChange?(insertionAnchor(in: textView))
+    }
+
+    func insertionAnchor(
+        in textView: MarkdownTextView,
+        selectedRange: NSRange? = nil
+    ) -> MarkdownTextInsertionAnchor {
+        MarkdownTextInsertionAnchor(
+            sourceText: restoreAnchorSubstitutions(in: textView.textStorage),
+            selectedRange: selectedRange ?? textView.selectedRange
+        )
     }
 
     /// Walk all post-styling substitutions in `storage` and reverse them
