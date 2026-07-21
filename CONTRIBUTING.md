@@ -24,8 +24,8 @@ documentation tweaks are welcome as PRs directly.
 Start by forking the repository on GitHub, then clone your fork locally:
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/swift-markdown-engine.git
-cd swift-markdown-engine
+git clone https://github.com/YOUR-USERNAME/SwiftMarkdownEngine.git
+cd SwiftMarkdownEngine
 git remote add upstream https://github.com/nodes-app/swift-markdown-engine.git
 git fetch upstream
 swift build

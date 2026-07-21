@@ -53,4 +53,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DocC documentation catalog with landing page and topic groups
 - Triple-slash documentation comments on the full public API surface
 
-[Unreleased]: https://github.com/nodes-app/swift-markdown-engine/compare/HEAD
+[Unreleased]: https://github.com/codesmithing-dev/SwiftMarkdownEngine/compare/0.11.0...HEAD

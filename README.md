@@ -3,7 +3,7 @@
 [![Swift 5.9](https://img.shields.io/badge/Swift-5.9+-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![Platforms macOS 14+](https://img.shields.io/badge/Platforms-macOS%2014+-lightgrey)](https://developer.apple.com/macos/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-yellow.svg)](LICENSE)
-[![CI](https://github.com/nodes-app/swift-markdown-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/nodes-app/swift-markdown-engine/actions/workflows/ci.yml)
+[![CI](https://github.com/codesmithing-dev/SwiftMarkdownEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/codesmithing-dev/SwiftMarkdownEngine/actions/workflows/ci.yml)
 
 
 
@@ -44,13 +44,13 @@ When we started building **[Nodes](https://nodes-web.com/#/)** a minimal, beauti
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/nodes-app/swift-markdown-engine", from: "0.1.0")
+    .package(url: "https://github.com/codesmithing-dev/SwiftMarkdownEngine.git", from: "0.11.0")
 ],
 targets: [
     .target(
         name: "YourApp",
         dependencies: [
-            .product(name: "MarkdownEngine", package: "swift-markdown-engine"),
+            .product(name: "MarkdownEngine", package: "SwiftMarkdownEngine"),
         ]
     )
 ]
@@ -241,7 +241,7 @@ swift package --disable-sandbox preview-documentation --target MarkdownEngine
 ```
 
 Once the package is hosted on Swift Package Index, the docs will live at
-`https://swiftpackageindex.com/nodes-app/swift-markdown-engine/documentation`.
+`https://swiftpackageindex.com/codesmithing-dev/SwiftMarkdownEngine/documentation`.
 
 ## Requirements & Status
 
